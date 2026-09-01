@@ -96,6 +96,21 @@ export class PlayerController {
     this.cameraShake = Math.min(1, this.cameraShake + amount / 70);
   }
 
+  resetForSpawn(resetView = true): void {
+    this.verticalVelocity = 0;
+    this.grounded = true;
+    this.bobTime = 0;
+    this.recoilKick = 0;
+    this.cameraShake = 0;
+    this.character.velocity.set(0, 0, 0);
+    if (resetView) {
+      this.yaw = 0;
+      this.pitch = 0;
+    }
+    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+    this.syncCamera();
+  }
+
   faceDirection(direction: THREE.Vector3): void {
     this.yaw = Math.atan2(-direction.x, -direction.z);
   }

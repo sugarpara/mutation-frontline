@@ -127,6 +127,10 @@ export class Character {
     this.maxArmor = GAME_CONFIG.hero.armor;
     this.armor = this.maxArmor;
     this.alive = true;
+    this.respawnTimer = 0;
+    this.invulnerableTimer = 1.2;
+    this.stunRemaining = 0;
+    this.velocity.set(0, 0, 0);
     this.mesh.scale.setScalar(1.04);
     this.updateVisuals();
   }

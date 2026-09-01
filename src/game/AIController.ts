@@ -48,6 +48,7 @@ export class AIController {
   }
 
   reset(): void {
+    const definition = this.rangedWeapon;
     this.state = AIState.Defend;
     this.target = null;
     this.path = [];
@@ -58,8 +59,8 @@ export class AIController {
     this.attackWindup = 0;
     this.pendingAttackTarget = null;
     this.reloadTimer = 0;
-    this.ammo = WEAPONS[WeaponKind.Rifle].magazine;
-    this.reserve = WEAPONS[WeaponKind.Rifle].reserve;
+    this.ammo = definition.magazine;
+    this.reserve = definition.reserve;
     this.boostCooldown = 4 + Math.random() * 4;
     this.boostRemaining = 0;
     this.stuckTimer = 0;
@@ -199,7 +200,7 @@ export class AIController {
   }
 
   private shootAt(target: Character): void {
-    const definition = WEAPONS[WeaponKind.Rifle];
+    const definition = this.rangedWeapon;
     if (this.shootCooldown > 0) return;
     if (this.ammo <= 0) {
       if (this.reserve > 0) {
@@ -223,7 +224,7 @@ export class AIController {
     this.character.flashMuzzle();
     this.spawnTracer(start, end, this.character.team === Team.Attackers ? 0xffb14d : 0x60c9ff);
     if (distance < 20 && start.distanceTo(this.callbacks.getPlayer().position) < 23) {
-      this.audio.shoot('rifle');
+      this.audio.shoot(definition.kind === WeaponKind.HeroHmg ? 'hmg' : 'rifle');
     }
     if (!hit) return;
     const damage = definition.damage * (headshot ? definition.headMultiplier : 1);
@@ -232,12 +233,16 @@ export class AIController {
   }
 
   private finishReload(): void {
-    const definition = WEAPONS[WeaponKind.Rifle];
+    const definition = this.rangedWeapon;
     const needed = definition.magazine - this.ammo;
     const transfer = Math.min(needed, this.reserve);
     this.ammo += transfer;
     this.reserve -= transfer;
     if (this.reserve <= 0) this.reserve = definition.reserve;
+  }
+
+  private get rangedWeapon() {
+    return WEAPONS[this.character.role === CharacterRole.Hero ? WeaponKind.HeroHmg : WeaponKind.Rifle];
   }
 
   private nearestEnemy(team: Team): Character | null {

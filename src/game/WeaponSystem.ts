@@ -52,6 +52,7 @@ export class WeaponSystem {
   }
 
   get current(): WeaponRuntime { return this.runtimes.get(this.currentKind)!; }
+  get visible(): boolean { return this.viewModel.root.visible; }
 
   startQaShowcase(): void {
     this.qaShowcase = true;

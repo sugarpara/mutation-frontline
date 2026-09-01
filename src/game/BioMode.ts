@@ -84,6 +84,7 @@ export class BioMode {
 
   startRound(): void {
     if (!this.characters.length) this.initialize(this.selectedOperator);
+    this.clearBursts();
     this.infectionSystem.clear();
     this.roundPlayerRole = this.queuedPlayerRole;
     this.queuedPlayerRole = null;
@@ -189,6 +190,7 @@ export class BioMode {
   returnToMenu(): void {
     this.phase = GamePhase.Menu;
     this.infectionSystem.clear();
+    this.clearBursts();
     this.characters.forEach((character) => character.setAlive(false));
   }
 
@@ -205,6 +207,7 @@ export class BioMode {
   }
 
   runQaScenario(scenario: string): void {
+    if (scenario === 'biocountdown') return;
     this.phase = GamePhase.Active;
     this.countdownRemaining = 0;
     if (scenario === 'models') {
@@ -226,11 +229,30 @@ export class BioMode {
       this.convertToInfected(this.player, true);
       return;
     }
+    if (scenario === 'infectedrespawn') {
+      this.convertToInfected(this.player, false);
+      const attacker = this.characters[1];
+      this.player.invulnerableTimer = 0;
+      this.applyDamage(attacker, this.player, 1000, false);
+      return;
+    }
     if (scenario === 'infection') {
       const attacker = this.characters[1];
       const target = this.characters[2];
       this.convertToInfected(attacker, true);
       this.infectionSystem.begin(target, attacker);
+      return;
+    }
+    if (scenario === 'doubleinfection') {
+      const attacker = this.characters[1];
+      this.convertToInfected(attacker, true);
+      this.characters.slice(2, 7).forEach((character) => this.convertToInfected(character, false, attacker));
+      this.infectionSystem.begin(this.player, attacker);
+      this.infectionSystem.begin(this.characters[7], attacker);
+      return;
+    }
+    if (scenario === 'lasthuman') {
+      this.characters.slice(1).forEach((character, index) => this.convertToInfected(character, index === 0));
       return;
     }
     if (scenario === 'humanwin') {
@@ -249,8 +271,7 @@ export class BioMode {
 
   dispose(): void {
     this.disposeCharacters();
-    this.bursts.forEach((burst) => this.disposeBurst(burst));
-    this.bursts.length = 0;
+    this.clearBursts();
   }
 
   private releaseInfection(): void {
@@ -290,7 +311,19 @@ export class BioMode {
   }
 
   private evaluateHumans(): void {
-    if (this.humanCount === 0) this.endRound(false);
+    const humans = this.characters.filter((character) => character.team === Team.Human);
+    if (humans.length === 0) {
+      this.endRound(false);
+      return;
+    }
+    if (humans.length !== 1 || humans[0].role === CharacterRole.Hero) return;
+    const hero = humans[0];
+    if (this.infectionSystem.isPending(hero)) return;
+    hero.configureHero();
+    if (hero.isPlayer) this.callbacks.onPlayerRoleChanged();
+    this.ui.addFeed(`${hero.name} 成为最后英雄`);
+    this.ui.flash('hero');
+    this.ui.announce(hero.isPlayer ? '你已成为最后英雄 · 重装武器已部署' : `${hero.name} 已成为最后英雄`, 'hero', 3.2);
   }
 
   private respawnInfected(character: Character): void {
@@ -366,6 +399,11 @@ export class BioMode {
     this.scene.remove(burst.points);
     burst.points.geometry.dispose();
     (burst.points.material as THREE.Material).dispose();
+  }
+
+  private clearBursts(): void {
+    this.bursts.forEach((burst) => this.disposeBurst(burst));
+    this.bursts.length = 0;
   }
 
   private disposeCharacters(): void {

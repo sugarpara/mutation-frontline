@@ -99,6 +99,7 @@ export class BombMode {
   get pendingInfectionCount(): number { return 0; }
   get canPlayerMove(): boolean { return this.phase === GamePhase.Active && !this.isPlayerInteracting(); }
   get canPlayerAttack(): boolean { return !this.isPlayerInteracting(); }
+  get actionTimeRemaining(): number { return this.plantedSite === null ? this.roundRemaining : this.fuseRemaining; }
 
   get hudState(): BombHUDState {
     const site = this.plantedSite === null ? null : this.plantedSite === 0 ? 'A' : 'B';
@@ -176,6 +177,7 @@ export class BombMode {
 
   startRound(): void {
     if (!this.characters.length) this.initialize(this.selectedOperator);
+    this.clearExplosion();
     if (this.matchEnded) {
       this.playerScore = 0;
       this.opponentScore = 0;
@@ -230,13 +232,15 @@ export class BombMode {
     }
     if (this.player.alive) this.playerSurvivalSeconds += delta;
     this.aiControllers.forEach((controller) => controller.update(delta, this.phase));
+    if (this.evaluateElimination()) return;
     this.updateBombCarrier();
 
     if (this.plantedSite !== null) {
       this.updatePlantedBomb(delta);
     } else {
+      const availableRoundTime = this.roundRemaining;
       this.roundRemaining = Math.max(0, this.roundRemaining - delta);
-      this.updatePlanting(delta);
+      this.updatePlanting(Math.min(delta, availableRoundTime));
       if (this.plantedSite === null && this.roundRemaining <= 0) this.endRound(false, '行动时间耗尽，防守方守住目标区。');
     }
     this.evaluateElimination();
@@ -278,6 +282,12 @@ export class BombMode {
 
   returnToMenu(): void {
     this.phase = GamePhase.Menu;
+    this.clearInteraction();
+    this.interactionInterrupts.clear();
+    this.bombCarrier = null;
+    this.plantedSite = null;
+    this.qaAutoInteract = false;
+    this.clearExplosion();
     this.characters.forEach((character) => character.setAlive(false));
     this.siteRoot.visible = false;
     this.bombRoot.visible = false;
@@ -313,6 +323,102 @@ export class BombMode {
       this.qaAutoInteract = true;
       return;
     }
+    if (scenario === 'bombplanttoolate') {
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      this.roundRemaining = 0.001;
+      this.player.position.copy(this.sites[0]);
+      this.bombCarrier = this.player;
+      this.interactionKind = 'plant';
+      this.interactionActor = this.player;
+      this.interactionSite = 0;
+      this.interactionProgress = GAME_CONFIG.bomb.plantSeconds - 0.01;
+      this.qaAutoInteract = true;
+      return;
+    }
+    if (scenario === 'bombplantoutside') {
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      this.qaAutoInteract = true;
+      return;
+    }
+    if (scenario === 'bombplantinterrupt') {
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      this.player.position.copy(this.sites[0]);
+      this.bombCarrier = this.player;
+      this.interactionKind = 'plant';
+      this.interactionActor = this.player;
+      this.interactionSite = 0;
+      this.interactionProgress = GAME_CONFIG.bomb.plantSeconds * 0.5;
+      return;
+    }
+    if (scenario === 'bombdrop') {
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      const carrier = this.bombCarrier!;
+      const defender = this.characters.find((character) => character.team === Team.Defenders)!;
+      carrier.invulnerableTimer = 0;
+      this.applyDamage(defender, carrier, 10000, false);
+      const picker = this.characters.find((character) => character.team === Team.Attackers && character.alive)!;
+      picker.position.copy(this.bombPosition);
+      return;
+    }
+    if (scenario === 'bomblastseconddefuse') {
+      this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds;
+      this.startRound();
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      const planter = this.characters.find((character) => character.team === Team.Attackers)!;
+      this.plantBomb(0, planter);
+      this.player.position.copy(this.sites[0]).add(new THREE.Vector3(0.6, 0, 0));
+      this.interactionKind = 'defuse';
+      this.interactionActor = this.player;
+      this.interactionSite = 0;
+      this.interactionProgress = GAME_CONFIG.bomb.defuseSeconds - 0.001;
+      this.fuseRemaining = 0.001;
+      this.qaAutoInteract = true;
+      return;
+    }
+    if (scenario === 'bombdefusetoolate') {
+      this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds;
+      this.startRound();
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      const planter = this.characters.find((character) => character.team === Team.Attackers)!;
+      this.plantBomb(0, planter);
+      this.player.position.copy(this.sites[0]).add(new THREE.Vector3(0.6, 0, 0));
+      this.interactionKind = 'defuse';
+      this.interactionActor = this.player;
+      this.interactionSite = 0;
+      this.interactionProgress = GAME_CONFIG.bomb.defuseSeconds - 0.01;
+      this.fuseRemaining = 0.001;
+      this.qaAutoInteract = true;
+      return;
+    }
+    if (scenario === 'bombdefuseinterrupt') {
+      this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds;
+      this.startRound();
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      const planter = this.characters.find((character) => character.team === Team.Attackers)!;
+      this.plantBomb(0, planter);
+      this.player.position.copy(this.sites[0]).add(new THREE.Vector3(0.6, 0, 0));
+      this.interactionKind = 'defuse';
+      this.interactionActor = this.player;
+      this.interactionSite = 0;
+      this.interactionProgress = GAME_CONFIG.bomb.defuseSeconds * 0.5;
+      return;
+    }
+    if (scenario === 'bombswap') {
+      this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds - 1;
+      this.startRound();
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      this.characters.filter((character) => character.team === Team.Defenders).forEach((character) => character.setAlive(false));
+      this.evaluateElimination();
+      return;
+    }
     this.phase = GamePhase.Active;
     this.countdownRemaining = 0;
     if (scenario === 'bombplant') {
@@ -329,6 +435,12 @@ export class BombMode {
     } else if (scenario === 'bombdefenderswin') {
       this.characters.filter((character) => character.team === Team.Attackers).forEach((character) => character.setAlive(false));
       this.evaluateElimination();
+    } else if (scenario === 'bombtimeout') {
+      this.roundRemaining = 0.001;
+    } else if (scenario === 'bombmatchwin') {
+      this.playerScore = GAME_CONFIG.bomb.roundsToWin - 1;
+      this.characters.filter((character) => character.team === Team.Defenders).forEach((character) => character.setAlive(false));
+      this.evaluateElimination();
     }
   }
 
@@ -337,12 +449,7 @@ export class BombMode {
     this.disposeGroup(this.siteRoot);
     this.disposeGroup(this.bombRoot);
     this.scene.remove(this.siteRoot, this.bombRoot);
-    if (this.explosion) {
-      this.scene.remove(this.explosion);
-      this.explosion.geometry.dispose();
-      (this.explosion.material as THREE.Material).dispose();
-      this.explosion = null;
-    }
+    this.clearExplosion();
   }
 
   private getTacticalPoint(character: Character): THREE.Vector3 | null {
@@ -371,6 +478,7 @@ export class BombMode {
   }
 
   private updatePlantedBomb(delta: number): void {
+    const availableFuseTime = this.fuseRemaining;
     this.fuseRemaining = Math.max(0, this.fuseRemaining - delta);
     const second = Math.ceil(this.fuseRemaining);
     if (second !== this.lastBeepSecond && (second <= 10 || second % 2 === 0)) {
@@ -379,7 +487,7 @@ export class BombMode {
     }
     const defuser = this.getDefuserCandidate();
     if (defuser) {
-      const completed = this.advanceInteraction('defuse', defuser, this.plantedSite!, delta, GAME_CONFIG.bomb.defuseSeconds, () => {
+      const completed = this.advanceInteraction('defuse', defuser, this.plantedSite!, Math.min(delta, availableFuseTime), GAME_CONFIG.bomb.defuseSeconds, () => {
         defuser.stats.defuses += 1;
         this.audio.bombDefuse();
         this.endRound(false, `${defuser.name} 已拆除爆破核心。`);
@@ -433,10 +541,17 @@ export class BombMode {
     this.ui.addFeed('爆破核心已掉落');
   }
 
-  private evaluateElimination(): void {
-    if (this.phase !== GamePhase.Active) return;
-    if (this.infectedCount === 0) this.endRound(true, '防守小队已被全部击败。');
-    else if (this.humanCount === 0 && this.plantedSite === null) this.endRound(false, '进攻小队已被全部击败。');
+  private evaluateElimination(): boolean {
+    if (this.phase !== GamePhase.Active) return this.phase === GamePhase.Ended;
+    if (this.infectedCount === 0) {
+      this.endRound(true, '防守小队已被全部击败。');
+      return true;
+    }
+    if (this.humanCount === 0 && this.plantedSite === null) {
+      this.endRound(false, '进攻小队已被全部击败。');
+      return true;
+    }
+    return false;
   }
 
   private endRound(attackersWon: boolean, reason: string): void {
@@ -669,11 +784,21 @@ export class BombMode {
   }
 
   private spawnExplosion(): void {
+    this.clearExplosion();
     const material = new THREE.MeshBasicMaterial({ color: 0xff7b32, transparent: true, opacity: 0.82, depthWrite: false });
     this.explosion = new THREE.Mesh(new THREE.SphereGeometry(0.75, 12, 8), material);
     this.explosion.position.copy(this.bombPosition).add(new THREE.Vector3(0, 0.7, 0));
     this.explosionLife = 0.8;
     this.scene.add(this.explosion);
+  }
+
+  private clearExplosion(): void {
+    if (!this.explosion) return;
+    this.scene.remove(this.explosion);
+    this.explosion.geometry.dispose();
+    (this.explosion.material as THREE.Material).dispose();
+    this.explosion = null;
+    this.explosionLife = 0;
   }
 
   private disposeCharacters(): void {

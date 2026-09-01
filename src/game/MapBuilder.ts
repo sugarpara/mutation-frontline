@@ -55,13 +55,13 @@ export class MapBuilder {
     this.addGround(0x604735, 0x8c6848, false);
     this.addBoundary(0x4a392e, 0xc0783b);
 
-    // Open A warehouse.
-    this.box(-29, 2.4, -8, 0.7, 4.8, 16, 0x59483c, { label: 'A warehouse wall' });
-    this.box(-18, 2.4, -13, 0.7, 4.8, 6, 0x59483c, { label: 'A warehouse wall' });
-    this.box(-18, 2.4, -3, 0.7, 4.8, 4, 0x59483c, { label: 'A warehouse wall' });
-    this.box(-23.5, 2.4, -16, 11.7, 4.8, 0.7, 0x59483c, { label: 'A warehouse wall' });
-    this.box(-26.5, 2.4, 0, 5.5, 4.8, 0.7, 0x59483c, { label: 'A warehouse wall' });
-    this.addSign(-23.5, 3.15, -15.62, 'A / ORE STORAGE', 0xff8a42, Math.PI);
+    // Open ore warehouse.
+    this.box(-29, 2.4, -8, 0.7, 4.8, 16, 0x59483c, { label: 'ore warehouse wall' });
+    this.box(-18, 2.4, -13, 0.7, 4.8, 6, 0x59483c, { label: 'ore warehouse wall' });
+    this.box(-18, 2.4, -3, 0.7, 4.8, 4, 0x59483c, { label: 'ore warehouse wall' });
+    this.box(-23.5, 2.4, -16, 11.7, 4.8, 0.7, 0x59483c, { label: 'ore warehouse wall' });
+    this.box(-26.5, 2.4, 0, 5.5, 4.8, 0.7, 0x59483c, { label: 'ore warehouse wall' });
+    this.addSign(-23.5, 3.15, -15.62, 'ORE STORAGE / W-1', 0xff8a42, Math.PI);
     this.addCrates([[-25, -11], [-21, -7], [-25, -3]], 0x72543d);
 
     // Central process hall and refinery silhouettes.
@@ -71,7 +71,7 @@ export class MapBuilder {
     for (const x of [-2, 1, 4]) this.addPipe(x, 6.4, -1, 0.32, 5.2, 0xa96938, 'y');
     for (const [x, z, height] of [[8, -27, 11], [-4, -27, 8], [18, -27, 7]] as const) this.addTower(x, z, height);
 
-    // Pipe bridge and B platform.
+    // Pipe bridge and pressure platform.
     this.box(3, 4.08, -19, 26, 0.22, 4, 0x3e3a36, { collision: false, metalness: 0.62 });
     this.addRamp(-14, -19, 8, 4, 4.2, 0x564c43);
     this.addRailings(3, 4.92, -19, 26, 4, 0xb97b42);
@@ -81,7 +81,7 @@ export class MapBuilder {
     this.box(25, 2.86, -7, 12, 0.26, 11, 0x49423a, { collision: false, metalness: 0.45 });
     this.addRamp(15.5, -7, 7, 4, 3, 0x5d5145);
     this.addRailings(25, 3.5, -7, 12, 11, 0xff9d42);
-    this.addSign(25, 4.1, -12.38, 'B / PRESSURE DECK', 0xffb14e, 0);
+    this.addSign(25, 4.1, -12.38, 'PRESSURE DECK / P-2', 0xffb14e, 0);
     this.defensePoints.push(new THREE.Vector3(-23, 0, -8), new THREE.Vector3(25, 3, -7));
 
     this.addLowRoute(23, 0x302c28, 0x9b5d34, 'LOW PIPE SERVICE');
@@ -106,9 +106,9 @@ export class MapBuilder {
     this.addWindows(7.5, 3.2, -14.02, 6.5, 0x72bfff);
     this.addSign(-7, 2.35, -1.96, 'NIGHT CARGO CONTROL', 0x6ac4ff, 0);
 
-    this.addZoneMark(-24, 0.04, 7, 'A', 0xff9b3d);
+    this.addZoneMark(-24, 0.04, 7, 'W', 0xff9b3d);
     this.box(23, 2.78, 7, 13, 0.25, 11, 0x263640, { collision: false, metalness: 0.5 });
-    this.addZoneMark(23, 2.92, 7, 'B', 0xffa23c);
+    this.addZoneMark(23, 2.92, 7, 'E', 0xffa23c);
     this.addRamp(14.5, 7, 7, 4, 2.9, 0x354853);
     this.addRailings(23, 3.45, 7, 13, 11, 0xeaa04c);
     this.defensePoints.push(new THREE.Vector3(-24, 0, 7), new THREE.Vector3(23, 2.9, 7));

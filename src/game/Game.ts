@@ -54,7 +54,13 @@ export class Game {
     this.bioMode = new BioMode(this.scene, this.map, this.collision, this.audio, this.ui, {
       onPlayerRoleChanged: () => this.handlePlayerRoleChanged(),
       onPlayerDamaged: (source, damage) => this.handlePlayerDamage(source, damage),
-      onPlayerRespawnState: () => undefined,
+      onPlayerRespawnState: (respawning) => {
+        this.weapons?.setVisible(!respawning);
+        if (!respawning) {
+          this.playerController?.resetForSpawn(false);
+          this.weapons?.syncRole();
+        }
+      },
       onRoundEnded: (humansWon) => this.handleRoundEnd(humansWon),
     });
     this.bombMode = new BombMode(this.scene, this.map, this.collision, this.input, this.audio, this.ui, {
@@ -88,6 +94,7 @@ export class Game {
 
   dispose(): void {
     cancelAnimationFrame(this.animationFrame);
+    this.audio.stopAll();
     this.weapons?.dispose();
     this.bioMode.dispose();
     this.bombMode.dispose();
@@ -141,6 +148,7 @@ export class Game {
   }
 
   private startGame(): void {
+    this.audio.stopAll();
     this.audio.resume();
     this.weapons?.dispose();
     const normalizedMap = normalizeMapForMode(this.settings.mode, this.settings.map);
@@ -188,13 +196,18 @@ export class Game {
   }
 
   private restartGame(): void {
+    this.audio.stopAll();
     this.audio.resume();
     this.mode.startRound();
+    this.playerController?.resetForSpawn();
     if (this.mode instanceof BombMode) this.faceBombSpawn();
     this.weapons?.reset();
     this.weapons?.equipPreferred(this.settings.startingWeapon);
     this.weapons?.setVisible(true);
     this.ui.showHUD();
+    if (this.qaMode && (this.qaScenario === 'humanwin' || this.qaScenario === 'infectedwin')) {
+      this.mode.runQaScenario(this.qaScenario);
+    }
     if (!this.qaMode) this.canvas.requestPointerLock();
   }
 
@@ -205,6 +218,7 @@ export class Game {
 
   private returnToMenu(): void {
     if (document.pointerLockElement) document.exitPointerLock();
+    this.audio.stopAll();
     this.mode.returnToMenu();
     this.weapons?.dispose();
     this.weapons = null;
@@ -284,9 +298,12 @@ export class Game {
       document.body.dataset.qaInfected = String(this.mode.infectedCount);
       document.body.dataset.qaPending = String(this.mode.pendingInfectionCount);
       document.body.dataset.qaPlayerHealth = this.mode.characters.length ? this.mode.player.health.toFixed(1) : '0';
+      document.body.dataset.qaPlayerAlive = String(this.mode.characters.length > 0 && this.mode.player.alive);
       document.body.dataset.qaPlayerPosition = this.mode.characters.length
         ? this.mode.player.position.toArray().map((value) => value.toFixed(2)).join(',')
         : '0,0,0';
+      document.body.dataset.qaPlayerYaw = (this.playerController?.yaw ?? 0).toFixed(3);
+      document.body.dataset.qaWeaponVisible = String(this.weapons?.visible ?? false);
       document.body.dataset.qaMap = this.map.currentMap;
       document.body.dataset.qaMode = this.mode instanceof BombMode ? 'bomb' : 'bio';
       document.body.dataset.qaAiStates = this.mode.aiControllers.map((controller) => controller.state).join(',');
@@ -297,6 +314,12 @@ export class Game {
         document.body.dataset.qaBombPlanted = String(bomb.planted);
         document.body.dataset.qaBombInteraction = bomb.interactionProgress.toFixed(2);
         document.body.dataset.qaBombPlayerTeam = this.mode.player.team;
+      } else {
+        delete document.body.dataset.qaBombRound;
+        delete document.body.dataset.qaBombScore;
+        delete document.body.dataset.qaBombPlanted;
+        delete document.body.dataset.qaBombInteraction;
+        delete document.body.dataset.qaBombPlayerTeam;
       }
     }
     this.ui.update(delta);
@@ -312,10 +335,13 @@ export class Game {
         && playablePhase;
       const bombCanMove = !(this.mode instanceof BombMode) || this.mode.canPlayerMove;
       const canMove = canLook && bombCanMove;
-      this.playerController?.update(delta, canMove, canLook);
+      const simulationDelta = this.mode instanceof BombMode && this.mode.phase === GamePhase.Active
+        ? Math.min(delta, this.mode.actionTimeRemaining)
+        : delta;
+      this.playerController?.update(simulationDelta, canMove, canLook);
       const canPlayerAttack = !(this.mode instanceof BombMode) || this.mode.canPlayerAttack;
-      this.weapons?.update(delta, locked && canPlayerAttack && this.mode.phase === GamePhase.Active && this.mode.player.stunRemaining <= 0);
-      this.mode.update(delta);
+      this.weapons?.update(simulationDelta, locked && canPlayerAttack && this.mode.phase === GamePhase.Active && this.mode.player.stunRemaining <= 0);
+      this.mode.update(simulationDelta);
       if (this.mode.phase !== GamePhase.Ended) {
         if (this.mode instanceof BombMode) {
           this.ui.updateBombHUD(

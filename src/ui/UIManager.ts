@@ -3,6 +3,8 @@ import type { Character } from '../game/Character';
 import type { BombHUDState, BombRoundResult } from '../game/BombMode';
 import { DEFAULT_MAP_BY_MODE, MAP_CATALOG, isMapAllowed, isMapId, mapsForMode, normalizeMapForMode } from '../game/mapCatalog';
 
+const SELECTION_STORAGE_KEY = 'mutation-frontline.mode-maps.v1';
+
 interface UIActions {
   start: () => void;
   resume: () => void;
@@ -40,6 +42,7 @@ export class UIManager {
   private readonly debugNotice = this.element<HTMLElement>('debug-notice');
 
   constructor() {
+    this.restoreSelection();
     this.bindMenuTabs();
     this.bindSettings();
     this.bindOperators();
@@ -67,7 +70,10 @@ export class UIManager {
     this.settings.mode = mode;
     this.settings.map = map;
     this.renderSelection();
-    if (notify) this.actions?.settingsChanged(this.settings);
+    if (notify) {
+      this.persistSelection();
+      this.actions?.settingsChanged(this.settings);
+    }
   }
 
   update(delta: number): void {
@@ -90,6 +96,7 @@ export class UIManager {
   }
 
   showMenu(): void {
+    this.clearTransientCombatUI();
     this.mainMenu.classList.add('active');
     this.hud.classList.add('hidden');
     this.pauseMenu.classList.add('hidden');
@@ -97,6 +104,7 @@ export class UIManager {
   }
 
   showHUD(): void {
+    this.clearTransientCombatUI();
     this.mainMenu.classList.remove('active');
     this.hud.classList.remove('hidden');
     this.pauseMenu.classList.add('hidden');
@@ -112,6 +120,7 @@ export class UIManager {
   }
 
   showResult(humansWon: boolean, player: Character, remainingHumans: number, survivalSeconds: number): void {
+    this.element('objective').classList.remove('bomb-objective');
     this.hud.classList.add('hidden');
     this.pauseMenu.classList.add('hidden');
     this.resultScreen.classList.remove('hidden');
@@ -133,6 +142,9 @@ export class UIManager {
   }
 
   showBombResult(result: BombRoundResult, player: Character, survivalSeconds: number): void {
+    const objective = this.element('objective');
+    objective.classList.remove('infected-objective');
+    objective.classList.add('bomb-objective');
     this.hud.classList.add('hidden');
     this.pauseMenu.classList.add('hidden');
     this.resultScreen.classList.remove('hidden');
@@ -161,9 +173,9 @@ export class UIManager {
     const humanPips = '<i></i>'.repeat(Math.min(8, humanCount));
     const infectedPips = '<i></i>'.repeat(Math.min(8, infectedCount));
     this.element('team-counter').innerHTML = `<span class="human"><small>人类</small><strong>${humanCount.toString().padStart(2, '0')}</strong><em>${humanPips}</em></span><b>封锁阶段</b><span class="infected"><em>${infectedPips}</em><strong>${infectedCount.toString().padStart(2, '0')}</strong><small>感染体</small></span>`;
-    const timer = phase === GamePhase.Countdown ? Math.max(0, countdown) : Math.max(0, time);
+    const timer = phase === GamePhase.Countdown ? Math.ceil(Math.max(0, countdown)) : Math.floor(Math.max(0, time));
     const minutes = Math.floor(timer / 60);
-    const seconds = Math.floor(timer % 60);
+    const seconds = timer % 60;
     this.element('round-timer').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     this.element('round-phase-label').textContent = phase === GamePhase.Countdown ? '准备阶段' : '回合进行中';
     const objective = this.element('objective');
@@ -203,9 +215,11 @@ export class UIManager {
     const attackerPips = '<i></i>'.repeat(Math.min(4, attackers));
     const defenderPips = '<i></i>'.repeat(Math.min(4, defenders));
     this.element('team-counter').innerHTML = `<span class="attackers"><small>进攻方</small><strong>${attackers.toString().padStart(2, '0')}</strong><em>${attackerPips}</em></span><b>第 ${bomb.roundNumber} 回合 · ${bomb.attackerScore}:${bomb.defenderScore}</b><span class="defenders"><em>${defenderPips}</em><strong>${defenders.toString().padStart(2, '0')}</strong><small>防守方</small></span>`;
-    const timer = phase === GamePhase.Countdown ? Math.max(0, countdown) : bomb.planted ? bomb.fuseRemaining : Math.max(0, time);
+    const timer = phase === GamePhase.Countdown
+      ? Math.ceil(Math.max(0, countdown))
+      : Math.floor(bomb.planted ? Math.max(0, bomb.fuseRemaining) : Math.max(0, time));
     const minutes = Math.floor(timer / 60);
-    const seconds = Math.floor(timer % 60);
+    const seconds = timer % 60;
     this.element('round-timer').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     this.element('round-phase-label').textContent = phase === GamePhase.Countdown ? '准备阶段' : bomb.planted ? `爆破倒计时 · ${bomb.site}区` : '回合进行中';
     const objective = this.element<HTMLElement>('objective');
@@ -384,6 +398,7 @@ export class UIManager {
       this.selectedMapByMode[this.settings.mode] = map;
       this.settings.map = map;
       this.renderSelection();
+      this.persistSelection();
       this.actions?.settingsChanged(this.settings);
     });
   }
@@ -429,6 +444,50 @@ export class UIManager {
       button.append(label, name);
       return button;
     }));
+  }
+
+  private restoreSelection(): void {
+    try {
+      const raw = window.localStorage.getItem(SELECTION_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { mode?: unknown; maps?: { bio?: unknown; bomb?: unknown } };
+      const bioMap = typeof saved.maps?.bio === 'string' && isMapId(saved.maps.bio) && isMapAllowed('bio', saved.maps.bio)
+        ? saved.maps.bio
+        : DEFAULT_MAP_BY_MODE.bio;
+      const bombMap = typeof saved.maps?.bomb === 'string' && isMapId(saved.maps.bomb) && isMapAllowed('bomb', saved.maps.bomb)
+        ? saved.maps.bomb
+        : DEFAULT_MAP_BY_MODE.bomb;
+      const mode: GameModeId = saved.mode === 'bomb' ? 'bomb' : 'bio';
+      this.selectedMapByMode.bio = bioMap;
+      this.selectedMapByMode.bomb = bombMap;
+      this.settings.mode = mode;
+      this.settings.map = this.selectedMapByMode[mode];
+    } catch {
+      this.selectedMapByMode.bio = DEFAULT_MAP_BY_MODE.bio;
+      this.selectedMapByMode.bomb = DEFAULT_MAP_BY_MODE.bomb;
+    }
+  }
+
+  private persistSelection(): void {
+    try {
+      window.localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify({
+        mode: this.settings.mode,
+        maps: this.selectedMapByMode,
+      }));
+    } catch {
+      // Storage can be unavailable in restricted browser contexts; the in-memory selection still works.
+    }
+  }
+
+  private clearTransientCombatUI(): void {
+    this.element('kill-feed').replaceChildren();
+    document.querySelectorAll('.screen-flash').forEach((flash) => flash.remove());
+    this.radarBlipElements.forEach((blip) => blip.remove());
+    this.radarBlipElements.clear();
+    this.hitTimer = 0;
+    this.damageTimer = 0;
+    this.hitMarker.className = 'hit-marker';
+    this.damageIndicator.classList.remove('active');
   }
 
   private bindArsenal(): void {
