@@ -1,0 +1,60 @@
+export const RIFLE_VIEW_CONFIG = {
+  name: '炎龙·原型',
+  basePosition: { x: 0.5, y: -0.335, z: -1.22 },
+  baseRotation: { x: 0.025, y: 0.18, z: -0.028 },
+  modelScale: 0.78,
+  smoothing: 15,
+  equipDuration: 0.52,
+  idle: {
+    frequency: 1.35,
+    vertical: 0.008,
+    horizontal: 0.004,
+    roll: 0.004,
+  },
+  walk: {
+    frequency: 8.6,
+    horizontal: 0.022,
+    vertical: 0.018,
+    roll: 0.025,
+    pitch: 0.012,
+  },
+  sprint: {
+    position: { x: 0.095, y: -0.135, z: 0.055 },
+    rotation: { x: -0.105, y: -0.035, z: -0.19 },
+    swayMultiplier: 1.55,
+  },
+  airborne: {
+    positionY: -0.045,
+    pitch: -0.045,
+    velocityInfluence: 0.0045,
+    landingDrop: 0.075,
+    landingPitch: 0.065,
+  },
+  recoil: {
+    backward: 0.055,
+    upward: 0.028,
+    pitch: 0.065,
+    roll: 0.012,
+    recovery: 17,
+    accumulation: 0.72,
+    maximum: 1.75,
+  },
+  wall: {
+    startDistance: 1.55,
+    fullDistance: 0.62,
+    retract: 0.15,
+    lift: 0.24,
+    yaw: -0.08,
+  },
+  reload: {
+    tilt: 0.31,
+    lower: 0.07,
+    magazineDrop: 0.58,
+    handTravel: { x: -0.24, y: -0.22, z: 0.16 },
+    boltTravel: 0.105,
+  },
+  muzzleFlashSeconds: 0.055,
+  shellLifetime: 3.2,
+} as const;
+
+export type RifleViewConfig = typeof RIFLE_VIEW_CONFIG;
