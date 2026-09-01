@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070c12" />
+    <meta name="description" content="原创单机 3D 第一人称生化感染游戏《异变前线》" />
+    <title>异变前线 | Mutation Frontline</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="异变前线 3D 游戏画面"></canvas>
+
+      <section id="main-menu" class="screen active">
+        <div class="brand-block">
+          <p class="eyebrow">KESTREL BIOHAZARD RESPONSE</p>
+          <h1>异变前线</h1>
+          <p class="subtitle">MUTATION FRONTLINE</p>
+          <p class="status-line"><span class="status-dot"></span> 多战区感染封锁协议已启动</p>
+        </div>
+
+        <div class="menu-shell">
+          <nav class="menu-tabs" aria-label="主菜单">
+            <button class="tab-button active" data-tab="play">开始游戏</button>
+            <button class="tab-button" data-tab="modes">模式选择</button>
+            <button class="tab-button" data-tab="arsenal">武器仓库</button>
+            <button class="tab-button" data-tab="operators">角色选择</button>
+            <button class="tab-button" data-tab="settings">设置</button>
+          </nav>
+
+          <div class="menu-content">
+            <div class="tab-panel active" data-panel="play">
+              <div class="mission-label">当前行动</div>
+              <h2 id="mission-map-name">Q-17 地下隔离区</h2>
+              <p id="mission-map-desc">废弃地铁轴线连接培养舱、检疫实验室、坍塌区与排水回路。</p>
+              <div class="mission-stats">
+                <span><b>模式</b> <i id="mission-mode-value">生化感染</i></span>
+                <span><b>规模</b> <i id="mission-size-value">1 玩家 + 7 AI</i></span>
+                <span><b>时限</b> <i id="mission-time-value">03:00</i></span>
+              </div>
+              <div class="map-selector" aria-label="地图选择">
+                <button class="map-option" data-map="refinery"><b>地图 1</b><span>沙脊炼化基地</span></button>
+                <button class="map-option" data-map="harbor"><b>地图 2</b><span>夜港货运站</span></button>
+                <button class="map-option selected" data-map="quarantine"><b>地图 3</b><span>Q-17 隔离区</span></button>
+              </div>
+              <button id="start-game" class="primary-button">部署行动</button>
+            </div>
+
+            <div class="tab-panel" data-panel="modes">
+              <h2>模式选择</h2>
+              <div class="mode-list">
+                <button class="mode-card selected" data-mode="bio">
+                  <span class="mode-index">01</span>
+                  <span><b>生化感染</b><small>生存、转化、阵营对抗</small></span>
+                  <i>可用</i>
+                </button>
+                <button class="mode-card" data-mode="bomb">
+                  <span class="mode-index">02</span>
+                  <span><b>战术爆破</b><small>4v4 · 双目标攻防</small></span>
+                  <i>可用</i>
+                </button>
+              </div>
+            </div>
+
+            <div class="tab-panel arsenal-panel" data-panel="arsenal">
+              <div class="arsenal-header"><div><span class="mission-label">KESTREL ARMORY</span><h2>武器仓库</h2></div><span>实装装备 03</span></div>
+              <div class="arsenal-workspace">
+                <aside class="arsenal-categories" aria-label="武器分类">
+                  <button class="arsenal-category active" data-category="primary"><b>01</b><span>主武器</span></button>
+                  <button class="arsenal-category" data-category="sidearm"><b>02</b><span>副武器</span></button>
+                  <button class="arsenal-category" data-category="melee"><b>03</b><span>近战</span></button>
+                </aside>
+                <div class="arsenal-showcase">
+                  <div id="arsenal-preview" class="arsenal-preview" data-weapon="rifle"><i></i><i></i><i></i><i></i></div>
+                  <span id="arsenal-type">突击步枪</span>
+                  <h3 id="arsenal-name">炎龙·原型</h3>
+                  <p id="arsenal-description">分层合金机匣与余烬能量脊构成的原创近未来制式步枪。</p>
+                </div>
+                <aside class="arsenal-details">
+                  <span class="mission-label">性能评估</span>
+                  <div class="arsenal-stat"><span>伤害 <b id="arsenal-damage-value">68</b></span><i><em id="arsenal-damage-bar"></em></i></div>
+                  <div class="arsenal-stat"><span>精度 <b id="arsenal-accuracy-value">78</b></span><i><em id="arsenal-accuracy-bar"></em></i></div>
+                  <div class="arsenal-stat"><span>射速 <b id="arsenal-rate-value">84</b></span><i><em id="arsenal-rate-bar"></em></i></div>
+                  <div class="arsenal-stat"><span>机动 <b id="arsenal-mobility-value">70</b></span><i><em id="arsenal-mobility-bar"></em></i></div>
+                  <button id="arsenal-equip" class="primary-button" data-weapon="rifle">已装备</button>
+                </aside>
+              </div>
+              <div class="arsenal-inventory">
+                <button class="arsenal-item selected" data-weapon="rifle" data-category="primary"><span class="mini-weapon rifle"></span><b>炎龙·原型</b><small>30 / 150</small></button>
+                <button class="arsenal-item filtered" data-weapon="pistol" data-category="sidearm"><span class="mini-weapon pistol"></span><b>P9 微光</b><small>12 / 60</small></button>
+                <button class="arsenal-item filtered" data-weapon="knife" data-category="melee"><span class="mini-weapon knife"></span><b>V3 高频刃</b><small>无弹药</small></button>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-panel="operators">
+              <h2>角色选择</h2>
+              <div id="operator-grid" class="operator-grid">
+                <button class="operator selected" data-operator="Rook"><span class="portrait rook"></span><b>陆沉 / Rook</b><small>男性突击队员</small></button>
+                <button class="operator" data-operator="Kite"><span class="portrait kite"></span><b>沈拓 / Kite</b><small>男性侦察兵</small></button>
+                <button class="operator" data-operator="Iris"><span class="portrait iris"></span><b>林澈 / Iris</b><small>女性医疗兵</small></button>
+                <button class="operator" data-operator="Vela"><span class="portrait vela"></span><b>季遥 / Vela</b><small>女性战术专家</small></button>
+              </div>
+            </div>
+
+            <div class="tab-panel" data-panel="settings">
+              <h2>设置</h2>
+              <label class="setting-row"><span>鼠标灵敏度 <output id="sensitivity-value">1.0</output></span><input id="sensitivity" type="range" min="0.35" max="2.2" value="1" step="0.05" /></label>
+              <label class="setting-row"><span>主音量 <output id="volume-value">65%</output></span><input id="volume" type="range" min="0" max="1" value="0.65" step="0.05" /></label>
+              <label class="toggle-row"><span>动态枪口闪光</span><input id="muzzle-flash-setting" type="checkbox" checked /></label>
+              <label class="toggle-row"><span>镜头受伤晃动</span><input id="camera-shake-setting" type="checkbox" checked /></label>
+            </div>
+          </div>
+        </div>
+        <div class="menu-footer">原创低多边形试玩版 0.1 · 单机 AI 模式</div>
+      </section>
+
+      <section id="hud" class="hidden" aria-live="polite">
+        <div class="radar-panel">
+          <div class="radar-frame">
+            <div class="radar-grid"></div>
+            <div class="radar-corridors"><i></i><i></i><i></i><i></i></div>
+            <div id="radar-blips" class="radar-blips"></div>
+            <span class="radar-player"></span>
+          </div>
+          <div id="radar-zone" class="radar-zone">沙脊炼化基地</div>
+        </div>
+        <div class="top-bar">
+          <div id="team-counter" class="team-counter"><span class="human"><small>人类</small><strong>08</strong></span><b>封锁阶段</b><span class="infected"><strong>00</strong><small>感染体</small></span></div>
+          <div class="round-center"><small id="round-phase-label">准备阶段</small><div id="round-timer" class="round-timer">00:10</div></div>
+        </div>
+        <div id="objective" class="objective-banner">病毒筛查进行中</div>
+        <div id="kill-feed" class="kill-feed"></div>
+        <div id="announcement" class="announcement hidden"></div>
+        <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><span></span></div>
+        <div id="hit-marker" class="hit-marker">×</div>
+        <div id="damage-indicator" class="damage-indicator"></div>
+        <div id="debug-notice" class="debug-notice hidden"></div>
+        <div class="bottom-hud">
+          <div class="vitals-panel">
+            <div class="operator-token"><span></span><i></i></div>
+            <div class="vitals-data">
+              <div class="role-badge" id="role-badge">人类行动员</div>
+              <div class="vital health"><span>+</span><b id="health-value">100</b><em>生命</em><div><i id="health-bar"></i></div></div>
+              <div class="vital armor"><span>◆</span><b id="armor-value">100</b><em>护甲</em><div><i id="armor-bar"></i></div></div>
+            </div>
+          </div>
+          <div class="combat-status"><span class="status-core">⌁</span><b id="combat-status-label">战术链路稳定</b></div>
+          <div class="weapon-panel">
+            <div class="weapon-glyph"><i></i><i></i></div>
+            <div id="weapon-name">炎龙·原型</div>
+            <div class="ammo"><b id="mag-ammo">30</b><span>/</span><strong id="reserve-ammo">150</strong></div>
+            <div id="reload-status"></div>
+            <div class="weapon-slots"><span data-slot="1" class="active">1 主武器</span><span data-slot="2">2 手枪</span><span data-slot="3">3 近战</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="pause-menu" class="overlay hidden">
+        <div class="dialog pause-dialog">
+          <p class="eyebrow">ACTION SUSPENDED</p>
+          <h2>行动暂停</h2>
+          <button id="resume-game" class="primary-button">继续行动</button>
+          <button id="pause-settings" class="secondary-button">音量：<span>65%</span></button>
+          <button id="quit-to-menu" class="secondary-button">返回主菜单</button>
+          <small>点击“继续行动”重新锁定鼠标</small>
+        </div>
+      </section>
+
+      <section id="result-screen" class="overlay hidden">
+        <div class="dialog result-dialog">
+          <p id="result-kicker" class="eyebrow">ROUND COMPLETE</p>
+          <h2 id="result-title">人类胜利</h2>
+          <p id="result-summary"></p>
+          <div class="result-stats"><span><i id="result-stat-two-label">击杀</i> <b id="result-kills">0</b></span><span><i id="result-stat-three-label">感染</i> <b id="result-infections">0</b></span><span><i id="result-stat-four-label">存活</i> <b id="result-survival">00:00</b></span></div>
+          <button id="restart-game" class="primary-button">重新开始</button>
+          <button id="result-to-menu" class="secondary-button">返回主菜单</button>
+        </div>
+      </section>
+
+      <div id="loading-screen"><div class="loader-mark"></div><b>异变前线</b><span>正在建立战场数据链...</span></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
