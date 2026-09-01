@@ -110,7 +110,7 @@
         <div class="menu-footer">原创低多边形试玩版 0.1 · 单机 AI 模式</div>
       </section>
 
-      <section id="hud" class="hidden" aria-live="polite">
+      <section id="hud" class="hidden">
         <div class="radar-panel">
           <div class="radar-frame">
             <div class="radar-grid"></div>
@@ -131,6 +131,15 @@
         <div id="hit-marker" class="hit-marker">×</div>
         <div id="damage-indicator" class="damage-indicator"></div>
         <div id="debug-notice" class="debug-notice hidden"></div>
+        <div id="spectator-hud" class="spectator-hud hidden">
+          <div class="spectator-heading"><span>观战模式</span><b id="spectator-target" role="status" aria-live="polite" aria-atomic="true">正在观战：--</b></div>
+          <div class="spectator-meta">
+            <span><small>阵营</small><b id="spectator-team">--</b></span>
+            <span><small>生命</small><b id="spectator-health">--</b></span>
+            <span><small>武器</small><b id="spectator-weapon">--</b></span>
+          </div>
+          <div id="spectator-hint" class="spectator-hint">鼠标左键 / → 下一位 · 鼠标右键 / ← 上一位</div>
+        </div>
         <div class="bottom-hud">
           <div class="vitals-panel">
             <div class="operator-token"><span></span><i></i></div>
@@ -150,6 +159,8 @@
           </div>
         </div>
       </section>
+
+      <div id="death-transition" class="death-transition" aria-hidden="true"></div>
 
       <section id="pause-menu" class="overlay hidden">
         <div class="dialog pause-dialog">

@@ -6,8 +6,9 @@ import { CollisionWorld } from './CollisionWorld';
 import { InputManager } from './InputManager';
 import { MapBuilder } from './MapBuilder';
 import { PlayerController } from './PlayerController';
+import { SpectatorController } from './SpectatorController';
 import { WeaponSystem } from './WeaponSystem';
-import { GamePhase, Team, WeaponKind, type GameModeId, type GameSettings } from './types';
+import { GamePhase, PlayerCameraState, Team, WeaponKind, type GameModeId, type GameSettings } from './types';
 import { isMapId, normalizeMapForMode } from './mapCatalog';
 import { UIManager } from '../ui/UIManager';
 
@@ -21,6 +22,7 @@ export class Game {
   private readonly audio = new AudioManager();
   private readonly ui = new UIManager();
   private readonly map: MapBuilder;
+  private readonly spectator: SpectatorController;
   private readonly bioMode: BioMode;
   private readonly bombMode: BombMode;
   private mode: BioMode | BombMode;
@@ -51,21 +53,16 @@ export class Game {
     this.scene.add(this.camera);
     this.input = new InputManager(canvas);
     this.map = new MapBuilder(this.scene, this.collision);
+    this.spectator = new SpectatorController(this.camera, this.input, this.collision, () => this.mode.characters);
     this.bioMode = new BioMode(this.scene, this.map, this.collision, this.audio, this.ui, {
       onPlayerRoleChanged: () => this.handlePlayerRoleChanged(),
       onPlayerDamaged: (source, damage) => this.handlePlayerDamage(source, damage),
-      onPlayerRespawnState: (respawning) => {
-        this.weapons?.setVisible(!respawning);
-        if (!respawning) {
-          this.playerController?.resetForSpawn(false);
-          this.weapons?.syncRole();
-        }
-      },
+      onPlayerRespawnState: (respawning) => this.handleBioRespawnState(respawning),
       onRoundEnded: (humansWon) => this.handleRoundEnd(humansWon),
     });
     this.bombMode = new BombMode(this.scene, this.map, this.collision, this.input, this.audio, this.ui, {
       onPlayerDamaged: (source, damage) => this.handlePlayerDamage(source, damage),
-      onPlayerDeath: () => this.weapons?.setVisible(false),
+      onPlayerDeath: () => this.handleBombPlayerDeath(),
       onRoundEnded: (result) => this.handleBombRoundEnd(result),
     });
     this.mode = this.bioMode;
@@ -94,6 +91,7 @@ export class Game {
 
   dispose(): void {
     cancelAnimationFrame(this.animationFrame);
+    this.spectator.reset();
     this.audio.stopAll();
     this.weapons?.dispose();
     this.bioMode.dispose();
@@ -137,11 +135,25 @@ export class Game {
     window.addEventListener('beforeunload', () => this.dispose(), { once: true });
     if (import.meta.env.DEV) {
       window.addEventListener('keydown', (event) => {
-        if (!(this.mode instanceof BioMode)) return;
-        if (event.code === 'F2') this.mode.queuePlayerRole('human');
-        else if (event.code === 'F3') this.mode.queuePlayerRole('mother');
-        else if (event.code === 'F4') this.mode.forceEndPreparation();
-        else return;
+        if (this.mode instanceof BioMode && event.code === 'F2') this.mode.queuePlayerRole('human');
+        else if (this.mode instanceof BioMode && event.code === 'F3') this.mode.queuePlayerRole('mother');
+        else if (this.mode instanceof BioMode && event.code === 'F4') this.mode.forceEndPreparation();
+        else if (this.qaMode && event.code === 'F6' && this.spectator.target?.alive) {
+          const target = this.spectator.target;
+          const attacker = this.mode.characters.find((character) => character.alive && character.team !== target.team);
+          if (!attacker) return;
+          target.invulnerableTimer = 0;
+          this.mode.applyDamage(attacker, target, 10000, false);
+        } else if (this.qaMode && event.code === 'F7' && this.mode.characters.length && this.mode.player.alive) {
+          const attacker = this.mode.characters.find((character) => character.alive && character.team !== this.mode.player.team);
+          if (!attacker) return;
+          this.mode.player.invulnerableTimer = 0;
+          this.mode.applyDamage(attacker, this.mode.player, 10000, false);
+        } else if (this.qaMode && event.code === 'F8') {
+          this.restartGame();
+        } else if (this.qaMode && event.code === 'F9') {
+          this.returnToMenu();
+        } else return;
         event.preventDefault();
       });
     }
@@ -150,6 +162,8 @@ export class Game {
   private startGame(): void {
     this.audio.stopAll();
     this.audio.resume();
+    this.spectator.reset();
+    this.ui.hideSpectator();
     this.weapons?.dispose();
     const normalizedMap = normalizeMapForMode(this.settings.mode, this.settings.map);
     if (normalizedMap !== this.settings.map) {
@@ -187,17 +201,23 @@ export class Game {
     this.weapons.setVisible(true);
     this.ui.showHUD();
     if (this.qaMode && this.qaScenario && this.qaScenario !== '1') this.mode.runQaScenario(this.qaScenario);
+    if (this.qaMode && this.mode instanceof BombMode && (this.qaScenario === 'bombspectatordefend' || this.qaScenario === 'bombspectatorswap')) {
+      this.faceBombSpawn();
+    }
     if (this.qaMode && this.qaScenario === 'level' && this.map.currentMap === 'refinery') {
       this.mode.player.position.set(-8, 4.2, -19);
       this.playerController.faceDirection(new THREE.Vector3(1, 0, 0));
     }
     if (this.qaMode && this.qaScenario === 'weapon') this.weapons.startQaShowcase();
+    if (this.qaMode) this.input.setEnabled(true);
     if (!this.qaMode) this.canvas.requestPointerLock();
   }
 
   private restartGame(): void {
     this.audio.stopAll();
     this.audio.resume();
+    this.spectator.reset();
+    this.ui.hideSpectator();
     this.mode.startRound();
     this.playerController?.resetForSpawn();
     if (this.mode instanceof BombMode) this.faceBombSpawn();
@@ -208,6 +228,7 @@ export class Game {
     if (this.qaMode && (this.qaScenario === 'humanwin' || this.qaScenario === 'infectedwin')) {
       this.mode.runQaScenario(this.qaScenario);
     }
+    if (this.qaMode) this.input.setEnabled(true);
     if (!this.qaMode) this.canvas.requestPointerLock();
   }
 
@@ -218,6 +239,8 @@ export class Game {
 
   private returnToMenu(): void {
     if (document.pointerLockElement) document.exitPointerLock();
+    this.spectator.reset();
+    this.ui.hideSpectator();
     this.audio.stopAll();
     this.mode.returnToMenu();
     this.weapons?.dispose();
@@ -243,6 +266,31 @@ export class Game {
 
   private handlePlayerRoleChanged(): void {
     this.weapons?.syncRole();
+  }
+
+  private handleBombPlayerDeath(): void {
+    this.playerController?.resetForSpawn(false);
+    this.weapons?.suspend();
+    this.weapons?.setVisible(false);
+    this.spectator.beginDeath('bomb', this.bombMode.player.team);
+    this.ui.beginDeathTransition('bomb', this.bombMode.player.team);
+  }
+
+  private handleBioRespawnState(respawning: boolean): void {
+    if (respawning) {
+      if (this.bioMode.player.team !== Team.Infected) return;
+      this.playerController?.resetForSpawn(false);
+      this.weapons?.suspend();
+      this.weapons?.setVisible(false);
+      this.spectator.beginDeath('bio', Team.Infected);
+      this.ui.beginDeathTransition('bio', Team.Infected);
+      return;
+    }
+    this.spectator.beginRespawn();
+    this.playerController?.resetForSpawn(false);
+    this.weapons?.syncRole();
+    this.weapons?.setVisible(true);
+    this.ui.hideSpectator(true);
   }
 
   private faceBombSpawn(): void {
@@ -271,12 +319,18 @@ export class Game {
 
   private handleRoundEnd(humansWon: boolean): void {
     if (document.pointerLockElement) document.exitPointerLock();
+    this.spectator.endRound();
+    this.ui.hideSpectator();
+    this.weapons?.suspend();
     this.input.setEnabled(false);
     this.ui.showResult(humansWon, this.mode.player, this.mode.humanCount, this.mode.playerSurvivalSeconds);
   }
 
   private handleBombRoundEnd(result: BombRoundResult): void {
     if (document.pointerLockElement) document.exitPointerLock();
+    this.spectator.endRound();
+    this.ui.hideSpectator();
+    this.weapons?.suspend();
     this.input.setEnabled(false);
     this.ui.showBombResult(result, this.bombMode.player, this.bombMode.playerSurvivalSeconds);
   }
@@ -302,8 +356,21 @@ export class Game {
       document.body.dataset.qaPlayerPosition = this.mode.characters.length
         ? this.mode.player.position.toArray().map((value) => value.toFixed(2)).join(',')
         : '0,0,0';
+      document.body.dataset.qaCameraPosition = this.camera.position.toArray().map((value) => value.toFixed(2)).join(',');
+      document.body.dataset.qaVisibleCharacterTeams = this.mode.characters
+        .filter((character) => character.mesh.visible)
+        .map((character) => character.team)
+        .join(',');
       document.body.dataset.qaPlayerYaw = (this.playerController?.yaw ?? 0).toFixed(3);
       document.body.dataset.qaWeaponVisible = String(this.weapons?.visible ?? false);
+      document.body.dataset.qaWeaponKind = this.weapons?.current.definition.kind ?? 'none';
+      document.body.dataset.qaWeaponAmmo = String(this.weapons?.current.ammo ?? 0);
+      document.body.dataset.qaPlayerShots = String(this.mode.characters.length ? this.mode.player.stats.shots : 0);
+      document.body.dataset.qaCameraState = this.spectator.state;
+      document.body.dataset.qaSpectatorTarget = this.spectator.target?.name ?? 'none';
+      document.body.dataset.qaSpectatorTargetTeam = this.spectator.target?.team ?? 'none';
+      document.body.dataset.qaSpectatorTeam = this.spectator.team ?? 'none';
+      document.body.dataset.qaSpectatorSafe = String(this.spectator.isSafeView);
       document.body.dataset.qaMap = this.map.currentMap;
       document.body.dataset.qaMode = this.mode instanceof BombMode ? 'bomb' : 'bio';
       document.body.dataset.qaAiStates = this.mode.aiControllers.map((controller) => controller.state).join(',');
@@ -327,9 +394,11 @@ export class Game {
     if (this.mode.phase === GamePhase.Menu) {
       this.updateMenuCamera(delta);
     } else {
-      const locked = document.pointerLockElement === this.canvas;
+      const locked = document.pointerLockElement === this.canvas || this.qaMode;
       const playablePhase = this.mode.phase === GamePhase.Countdown || this.mode.phase === GamePhase.Active;
-      const canLook = locked
+      const cameraPlaying = this.spectator.state === PlayerCameraState.Playing;
+      const canLook = cameraPlaying
+        && locked
         && this.mode.player.alive
         && this.mode.player.stunRemaining <= 0
         && playablePhase;
@@ -338,10 +407,15 @@ export class Game {
       const simulationDelta = this.mode instanceof BombMode && this.mode.phase === GamePhase.Active
         ? Math.min(delta, this.mode.actionTimeRemaining)
         : delta;
-      this.playerController?.update(simulationDelta, canMove, canLook);
+      if (!this.spectator.ownsCamera) {
+        this.playerController?.update(simulationDelta, canMove, canLook);
+      }
       const canPlayerAttack = !(this.mode instanceof BombMode) || this.mode.canPlayerAttack;
-      this.weapons?.update(simulationDelta, locked && canPlayerAttack && this.mode.phase === GamePhase.Active && this.mode.player.stunRemaining <= 0);
+      if (cameraPlaying) {
+        this.weapons?.update(simulationDelta, locked && canPlayerAttack && this.mode.phase === GamePhase.Active && this.mode.player.stunRemaining <= 0);
+      }
       this.mode.update(simulationDelta);
+      if (this.mode.phase !== GamePhase.Paused) this.spectator.update(simulationDelta);
       if (this.mode.phase !== GamePhase.Ended) {
         if (this.mode instanceof BombMode) {
           this.ui.updateBombHUD(
@@ -367,7 +441,14 @@ export class Game {
             this.weapons?.spreadVisual ?? 0,
           );
         }
-        this.ui.updateRadar(this.mode.player, this.mode.characters, this.playerController?.yaw ?? 0);
+        if (this.spectator.state === PlayerCameraState.Spectating) {
+          this.ui.showSpectator(this.spectator.gameMode ?? this.settings.mode, this.spectator.team ?? this.mode.player.team, this.spectator.target, this.spectator.isSafeView);
+          this.ui.clearRadar();
+        } else if (this.spectator.state === PlayerCameraState.DeathTransition) {
+          this.ui.clearRadar();
+        } else {
+          this.ui.updateRadar(this.mode.player, this.mode.characters, this.playerController?.yaw ?? 0);
+        }
       }
     }
 

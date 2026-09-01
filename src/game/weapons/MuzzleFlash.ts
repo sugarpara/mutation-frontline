@@ -85,6 +85,18 @@ export class MuzzleFlash {
     }
   }
 
+  clear(): void {
+    this.timer = 0;
+    this.group.visible = false;
+    this.flashLight.visible = false;
+    this.smokeParticles.forEach((particle) => {
+      this.scene.remove(particle.mesh);
+      particle.mesh.geometry.dispose();
+      (particle.mesh.material as THREE.Material).dispose();
+    });
+    this.smokeParticles.length = 0;
+  }
+
   dispose(): void {
     this.muzzleAnchor.remove(this.group, this.flashLight);
     this.group.traverse((object) => {
@@ -94,12 +106,7 @@ export class MuzzleFlash {
         materials.forEach((material) => material.dispose());
       }
     });
-    this.smokeParticles.forEach((particle) => {
-      this.scene.remove(particle.mesh);
-      particle.mesh.geometry.dispose();
-      (particle.mesh.material as THREE.Material).dispose();
-    });
-    this.smokeParticles.length = 0;
+    this.clear();
     this.flashLight.dispose();
   }
 

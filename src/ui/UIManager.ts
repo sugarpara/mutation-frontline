@@ -30,6 +30,7 @@ export class UIManager {
   private hitTimer = 0;
   private damageTimer = 0;
   private debugTimer = 0;
+  private spectatorRecoveryTimer = 0;
   private readonly radarBlipElements = new Map<string, HTMLElement>();
 
   private readonly mainMenu = this.element<HTMLElement>('main-menu');
@@ -40,6 +41,8 @@ export class UIManager {
   private readonly hitMarker = this.element<HTMLElement>('hit-marker');
   private readonly damageIndicator = this.element<HTMLElement>('damage-indicator');
   private readonly debugNotice = this.element<HTMLElement>('debug-notice');
+  private readonly spectatorHUD = this.element<HTMLElement>('spectator-hud');
+  private readonly deathTransition = this.element<HTMLElement>('death-transition');
 
   constructor() {
     this.restoreSelection();
@@ -93,6 +96,10 @@ export class UIManager {
       this.debugTimer -= delta;
       if (this.debugTimer <= 0) this.debugNotice.classList.add('hidden');
     }
+    if (this.spectatorRecoveryTimer > 0) {
+      this.spectatorRecoveryTimer -= delta;
+      if (this.spectatorRecoveryTimer <= 0) this.deathTransition.classList.remove('recovering');
+    }
   }
 
   showMenu(): void {
@@ -117,6 +124,55 @@ export class UIManager {
 
   hidePause(): void {
     this.pauseMenu.classList.add('hidden');
+  }
+
+  beginDeathTransition(mode: GameModeId, team: Team): void {
+    this.clearSpectatorClasses();
+    this.hud.classList.add('death-transitioning', `spectator-${mode}`);
+    this.hud.classList.toggle('spectator-attacker', team === Team.Attackers);
+    this.hud.classList.toggle('spectator-defender', team === Team.Defenders);
+    this.spectatorHUD.classList.add('hidden');
+    this.deathTransition.classList.remove('recovering');
+    this.spectatorRecoveryTimer = 0;
+    void this.deathTransition.offsetWidth;
+    this.deathTransition.classList.add('active');
+    this.deathTransition.setAttribute('aria-hidden', 'true');
+  }
+
+  showSpectator(mode: GameModeId, team: Team, target: Character | null, safeView: boolean): void {
+    this.hud.classList.remove('death-transitioning');
+    this.hud.classList.add('spectating', `spectator-${mode}`);
+    this.hud.classList.toggle('spectator-attacker', team === Team.Attackers);
+    this.hud.classList.toggle('spectator-defender', team === Team.Defenders);
+    this.spectatorHUD.classList.remove('hidden');
+    this.deathTransition.classList.remove('active');
+    this.deathTransition.setAttribute('aria-hidden', 'true');
+
+    const teamLabel = team === Team.Attackers ? '进攻方' : team === Team.Defenders ? '防守方' : '感染体';
+    this.setText('spectator-target', target ? `正在观战：${teamLabel} · ${target.name}` : '正在观战：安全地图视角');
+    this.setText('spectator-team', teamLabel);
+    this.setText('spectator-health', target ? `${Math.ceil(target.health)} / ${Math.ceil(target.maxHealth)}` : '--');
+    this.setText('spectator-weapon', target ? this.spectatorWeaponName(target) : '--');
+    this.setText('spectator-hint', safeView
+      ? mode === 'bomb' ? '本阵营暂无存活队友 · 等待回合结算' : '暂无存活感染体队友 · 等待异变重组'
+      : '鼠标左键 / → 下一位 · 鼠标右键 / ← 上一位');
+  }
+
+  hideSpectator(recovering = false): void {
+    this.clearSpectatorClasses();
+    this.spectatorHUD.classList.add('hidden');
+    this.deathTransition.classList.remove('active', 'recovering');
+    this.spectatorRecoveryTimer = 0;
+    this.deathTransition.setAttribute('aria-hidden', 'true');
+    if (!recovering) return;
+    void this.deathTransition.offsetWidth;
+    this.deathTransition.classList.add('recovering');
+    this.spectatorRecoveryTimer = 0.42;
+  }
+
+  clearRadar(): void {
+    this.radarBlipElements.forEach((blip) => blip.remove());
+    this.radarBlipElements.clear();
   }
 
   showResult(humansWon: boolean, player: Character, remainingHumans: number, survivalSeconds: number): void {
@@ -482,12 +538,34 @@ export class UIManager {
   private clearTransientCombatUI(): void {
     this.element('kill-feed').replaceChildren();
     document.querySelectorAll('.screen-flash').forEach((flash) => flash.remove());
-    this.radarBlipElements.forEach((blip) => blip.remove());
-    this.radarBlipElements.clear();
+    this.clearRadar();
+    this.hideSpectator();
     this.hitTimer = 0;
     this.damageTimer = 0;
     this.hitMarker.className = 'hit-marker';
     this.damageIndicator.classList.remove('active');
+  }
+
+  private clearSpectatorClasses(): void {
+    this.hud.classList.remove(
+      'death-transitioning',
+      'spectating',
+      'spectator-bio',
+      'spectator-bomb',
+      'spectator-attacker',
+      'spectator-defender',
+    );
+  }
+
+  private spectatorWeaponName(target: Character): string {
+    if (target.team === Team.Infected) return '异变利爪';
+    if (target.role === CharacterRole.Hero) return 'MX-100 曜日';
+    return '炎龙·原型';
+  }
+
+  private setText(id: string, text: string): void {
+    const element = this.element(id);
+    if (element.textContent !== text) element.textContent = text;
   }
 
   private bindArsenal(): void {

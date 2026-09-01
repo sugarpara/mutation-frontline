@@ -9,9 +9,10 @@ export class InputManager {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (event) => {
+      if (!this.enabled) return;
       if (!this.keys.has(event.code)) this.pressed.add(event.code);
       this.keys.add(event.code);
-      if (['Space', 'Digit1', 'Digit2', 'Digit3', 'KeyR', 'KeyE'].includes(event.code)) event.preventDefault();
+      if (['Space', 'Digit1', 'Digit2', 'Digit3', 'KeyR', 'KeyE', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
     });
     window.addEventListener('keyup', (event) => this.keys.delete(event.code));
     window.addEventListener('blur', () => this.reset());
@@ -31,7 +32,16 @@ export class InputManager {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) this.reset();
+    this.clearState();
+  }
+
+  clearState(): void {
+    this.keys.clear();
+    this.pressed.clear();
+    this.mouseButtons.clear();
+    this.mousePressed.clear();
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
   }
 
   isDown(code: string): boolean { return this.enabled && this.keys.has(code); }
@@ -62,12 +72,5 @@ export class InputManager {
     this.mousePressed.clear();
   }
 
-  private reset(): void {
-    this.keys.clear();
-    this.pressed.clear();
-    this.mouseButtons.clear();
-    this.mousePressed.clear();
-    this.mouseDeltaX = 0;
-    this.mouseDeltaY = 0;
-  }
+  private reset(): void { this.clearState(); }
 }

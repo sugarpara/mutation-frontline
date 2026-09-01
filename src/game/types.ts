@@ -32,6 +32,14 @@ export enum GamePhase {
   Ended = 'ended',
 }
 
+export enum PlayerCameraState {
+  Playing = 'playing',
+  DeathTransition = 'death-transition',
+  Spectating = 'spectating',
+  Respawning = 'respawning',
+  RoundEnded = 'round-ended',
+}
+
 export enum AIState {
   Follow = 'follow',
   Defend = 'defend',

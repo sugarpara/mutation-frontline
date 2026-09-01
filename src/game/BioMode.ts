@@ -229,6 +229,16 @@ export class BioMode {
       this.convertToInfected(this.player, true);
       return;
     }
+    if (scenario === 'biospectatorrespawn') {
+      const alpha = this.characters[1];
+      this.convertToInfected(alpha, true);
+      this.convertToInfected(this.characters[2], false, alpha);
+      this.convertToInfected(this.player, false, alpha);
+      const attacker = this.characters[3];
+      this.player.invulnerableTimer = 0;
+      this.applyDamage(attacker, this.player, 1000, false);
+      return;
+    }
     if (scenario === 'infectedrespawn') {
       this.convertToInfected(this.player, false);
       const attacker = this.characters[1];
@@ -241,6 +251,12 @@ export class BioMode {
       const target = this.characters[2];
       this.convertToInfected(attacker, true);
       this.infectionSystem.begin(target, attacker);
+      return;
+    }
+    if (scenario === 'biohumaninfected') {
+      const attacker = this.characters[1];
+      this.convertToInfected(attacker, true);
+      this.infectionSystem.begin(this.player, attacker);
       return;
     }
     if (scenario === 'doubleinfection') {

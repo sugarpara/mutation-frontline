@@ -294,6 +294,35 @@ export class BombMode {
   }
 
   runQaScenario(scenario: string): void {
+    if (scenario === 'bombspectatorattack' || scenario === 'bombspectatordefend' || scenario === 'bombspectatorall' || scenario === 'bombspectatorswap') {
+      if (scenario === 'bombspectatordefend') {
+        this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds;
+        this.startRound();
+      } else if (scenario === 'bombspectatorswap') {
+        this.roundNumber = GAME_CONFIG.bomb.sideSwapAfterRounds - 1;
+        this.startRound();
+      }
+      this.phase = GamePhase.Active;
+      this.countdownRemaining = 0;
+      if (scenario === 'bombspectatorall') {
+        const planter = this.characters.find((character) => character.team === Team.Attackers && !character.isPlayer)!;
+        this.plantBomb(0, planter);
+        this.fuseRemaining = 24;
+      }
+      const enemy = this.characters.find((character) => character.team !== this.player.team && character.alive)!;
+      const playerTeam = this.player.team;
+      this.player.invulnerableTimer = 0;
+      this.applyDamage(enemy, this.player, 10000, false);
+      if (scenario === 'bombspectatorall') {
+        this.characters
+          .filter((character) => character.team === playerTeam && character.alive)
+          .forEach((character) => {
+            character.invulnerableTimer = 0;
+            this.applyDamage(enemy, character, 10000, false);
+          });
+      }
+      return;
+    }
     if (scenario === 'bomblastsecondplant') {
       this.phase = GamePhase.Active;
       this.countdownRemaining = 0;

@@ -78,6 +78,18 @@ export class WeaponViewModel {
     this.animator?.startReload(wasEmpty);
   }
 
+  suspend(): void {
+    this.time = 0;
+    this.genericKick = 0;
+    this.animator?.reset();
+    if (!this.animator) {
+      this.poseRoot.position.set(0, 0, 0);
+      this.poseRoot.rotation.set(0, 0, 0);
+    }
+    this.muzzleEffect?.clear();
+    this.shellCasings.clear();
+  }
+
   dispose(): void {
     this.clearCurrentModel();
     this.shellCasings.dispose();

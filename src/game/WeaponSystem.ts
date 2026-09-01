@@ -174,6 +174,17 @@ export class WeaponSystem {
     this.syncRole();
   }
 
+  suspend(): void {
+    this.pendingMelee = null;
+    this.qaShowcase = false;
+    this.spreadVisual = 0;
+    for (const runtime of this.runtimes.values()) {
+      runtime.cooldown = 0;
+      runtime.reloadRemaining = 0;
+    }
+    this.viewModel.suspend();
+  }
+
   equipPreferred(kind: WeaponKind): void {
     if (this.owner.team === Team.Infected || ![WeaponKind.Rifle, WeaponKind.Pistol, WeaponKind.Knife].includes(kind)) return;
     this.switchWeapon(kind, this.slotForKind(kind));

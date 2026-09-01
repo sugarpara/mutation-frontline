@@ -95,9 +95,13 @@ export class ShellCasingSystem {
     }
   }
 
-  dispose(): void {
+  clear(): void {
     this.casings.forEach((casing) => this.scene.remove(casing.mesh));
     this.casings.length = 0;
+  }
+
+  dispose(): void {
+    this.clear();
     this.geometry.dispose();
     this.material.dispose();
   }
