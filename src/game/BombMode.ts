@@ -5,7 +5,7 @@ import { Character } from './Character';
 import { AI_NAMES, GAME_CONFIG } from './config';
 import { CollisionWorld } from './CollisionWorld';
 import { InputManager } from './InputManager';
-import { MapBuilder } from './MapBuilder';
+import { MapBuilder, type BombMapLayout } from './MapBuilder';
 import { GamePhase, Team, type DamageResult, type OperatorId } from './types';
 import { UIManager } from '../ui/UIManager';
 
@@ -550,37 +550,31 @@ export class BombMode {
   }
 
   private placeTeams(): void {
-    const attackerSpawns = this.map.spawnPoints.slice(0, 4);
-    const defenseNodes = this.map.navigationNodes
-      .filter((node) => node.defense || this.sites.some((site) => node.position.distanceTo(site) < 10))
-      .slice(0, 4)
-      .map((node) => node.position.clone());
-    const generatedDefenseSpawns = this.sites.flatMap((site) => [
-      this.collision.resolveCircle(site, site.clone().add(new THREE.Vector3(-2.4, 0, -1.8)), GAME_CONFIG.characterRadius),
-      this.collision.resolveCircle(site, site.clone().add(new THREE.Vector3(2.4, 0, 1.8)), GAME_CONFIG.characterRadius),
-    ]);
-    const defenderSpawns = Array.from({ length: 4 }, (_, index) => defenseNodes[index] ?? generatedDefenseSpawns[index]);
+    const layout = this.requireBombLayout();
+    if (layout.attackerSpawns.length < 4 || layout.defenderSpawns.length < 4) {
+      throw new Error(`Bomb map ${this.map.currentMap} requires four attacker and four defender spawns.`);
+    }
     const attackers = this.characters.filter((character) => character.team === Team.Attackers);
     const defenders = this.characters.filter((character) => character.team === Team.Defenders);
-    const place = (character: Character, source: THREE.Vector3 | undefined, fallback: THREE.Vector3) => {
-      const position = (source ?? fallback).clone();
+    const place = (character: Character, source: THREE.Vector3) => {
+      const position = source.clone();
       position.y = this.collision.getGroundHeight(position.x, position.z, position.y);
       character.position.copy(position);
     };
     attackers.forEach((character, index) => {
-      place(character, attackerSpawns[index], new THREE.Vector3(-30 + index * 2, 0, 24));
+      place(character, layout.attackerSpawns[index]);
     });
     defenders.forEach((character, index) => {
-      place(character, defenderSpawns[index], new THREE.Vector3(24 + index * 2, 0, -18));
+      place(character, layout.defenderSpawns[index]);
     });
   }
 
   private buildSites(): void {
     this.disposeGroup(this.siteRoot);
     this.sites.length = 0;
-    const fallback = [new THREE.Vector3(-24, 0, 8), new THREE.Vector3(24, 0, 8)];
-    const source = this.map.defensePoints.length >= 2 ? this.map.defensePoints : fallback;
-    source.slice(0, 2).forEach((point, index) => {
+    const layout = this.requireBombLayout();
+    if (layout.sites.length !== 2) throw new Error(`Bomb map ${this.map.currentMap} requires exactly two objective sites.`);
+    layout.sites.forEach((point, index) => {
       const site = point.clone();
       site.y = this.collision.getGroundHeight(site.x, site.z, site.y);
       this.sites.push(site);
@@ -603,6 +597,12 @@ export class BombMode {
       group.add(ring, disc, label);
       this.siteRoot.add(group);
     });
+  }
+
+  private requireBombLayout(): BombMapLayout {
+    const layout = this.map.bombLayout;
+    if (!layout) throw new Error(`Map ${this.map.currentMap} is not available in bomb mode.`);
+    return layout;
   }
 
   private makeSiteLabel(text: string, color: string): THREE.Sprite {

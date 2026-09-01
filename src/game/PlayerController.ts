@@ -25,9 +25,9 @@ export class PlayerController {
     this.syncCamera();
   }
 
-  update(delta: number, canMove: boolean): void {
+  update(delta: number, canMove: boolean, canLook = canMove): void {
     const mouse = this.input.consumeMouseDelta();
-    if (canMove) {
+    if (canLook) {
       this.yaw -= mouse.x * 0.0018 * this.sensitivity;
       this.pitch -= mouse.y * 0.0018 * this.sensitivity;
       this.pitch = THREE.MathUtils.clamp(this.pitch, -1.48, 1.48);

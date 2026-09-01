@@ -7,7 +7,8 @@ import { InputManager } from './InputManager';
 import { MapBuilder } from './MapBuilder';
 import { PlayerController } from './PlayerController';
 import { WeaponSystem } from './WeaponSystem';
-import { GamePhase, WeaponKind, type GameSettings } from './types';
+import { GamePhase, Team, WeaponKind, type GameModeId, type GameSettings } from './types';
+import { isMapId, normalizeMapForMode } from './mapCatalog';
 import { UIManager } from '../ui/UIManager';
 
 export class Game {
@@ -27,7 +28,7 @@ export class Game {
   private weapons: WeaponSystem | null = null;
   private animationFrame = 0;
   private menuTime = 0;
-  private settings: GameSettings = this.ui.settings;
+  private settings: GameSettings = { ...this.ui.settings };
   private readonly qaScenario = new URLSearchParams(window.location.search).get('qa');
   private readonly requestedMap = new URLSearchParams(window.location.search).get('map');
   private readonly requestedWeapon = new URLSearchParams(window.location.search).get('weapon');
@@ -67,13 +68,15 @@ export class Game {
   }
 
   start(): void {
-    if (import.meta.env.DEV && ['refinery', 'harbor', 'quarantine'].includes(this.requestedMap ?? '')) {
-      this.settings.map = this.requestedMap as GameSettings['map'];
+    const requestedMode: GameModeId | null = this.requestedMode === 'bio' || this.requestedMode === 'bomb' ? this.requestedMode : null;
+    const requestedMap = isMapId(this.requestedMap) ? this.requestedMap : undefined;
+    if (import.meta.env.DEV && (requestedMode || requestedMap)) {
+      this.ui.setSelection(requestedMode ?? this.settings.mode, requestedMap, false);
+      this.settings = { ...this.ui.settings };
     }
     if (import.meta.env.DEV && ['rifle', 'pistol', 'knife'].includes(this.requestedWeapon ?? '')) {
       this.settings.startingWeapon = this.requestedWeapon as WeaponKind;
     }
-    if (import.meta.env.DEV && this.requestedMode === 'bomb') this.settings.mode = 'bomb';
     this.map.build(this.settings.map);
     this.ui.finishLoading();
     this.input.setEnabled(false);
@@ -140,6 +143,11 @@ export class Game {
   private startGame(): void {
     this.audio.resume();
     this.weapons?.dispose();
+    const normalizedMap = normalizeMapForMode(this.settings.mode, this.settings.map);
+    if (normalizedMap !== this.settings.map) {
+      this.ui.setSelection(this.settings.mode, normalizedMap, false);
+      this.settings = { ...this.settings, map: normalizedMap };
+    }
     this.mode = this.settings.mode === 'bomb' ? this.bombMode : this.bioMode;
     this.map.build(this.settings.map);
     this.mode.initialize(this.settings.operator);
@@ -162,8 +170,10 @@ export class Game {
         muzzleFlashEnabled: () => this.settings.muzzleFlash,
       },
     );
-    if (this.mode instanceof BombMode) this.mode.startMatch();
-    else this.mode.startRound();
+    if (this.mode instanceof BombMode) {
+      this.mode.startMatch();
+      this.faceBombSpawn();
+    } else this.mode.startRound();
     this.weapons.reset();
     this.weapons.equipPreferred(this.settings.startingWeapon);
     this.weapons.setVisible(true);
@@ -180,6 +190,7 @@ export class Game {
   private restartGame(): void {
     this.audio.resume();
     this.mode.startRound();
+    if (this.mode instanceof BombMode) this.faceBombSpawn();
     this.weapons?.reset();
     this.weapons?.equipPreferred(this.settings.startingWeapon);
     this.weapons?.setVisible(true);
@@ -203,18 +214,34 @@ export class Game {
   }
 
   private applySettings(settings: GameSettings): void {
-    const mapChanged = this.settings.map !== settings.map;
-    this.settings = { ...settings };
-    this.audio.setVolume(settings.volume);
+    const map = normalizeMapForMode(settings.mode, settings.map);
+    if (map !== settings.map) this.ui.setSelection(settings.mode, map, false);
+    const nextSettings = { ...settings, map };
+    const mapChanged = this.settings.map !== nextSettings.map;
+    this.settings = nextSettings;
+    this.audio.setVolume(nextSettings.volume);
     if (this.playerController) {
-      this.playerController.sensitivity = settings.sensitivity;
-      this.playerController.cameraShakeEnabled = settings.cameraShake;
+      this.playerController.sensitivity = nextSettings.sensitivity;
+      this.playerController.cameraShakeEnabled = nextSettings.cameraShake;
     }
-    if (mapChanged && this.mode.phase === GamePhase.Menu) this.map.build(settings.map);
+    if (mapChanged && this.mode.phase === GamePhase.Menu) this.map.build(nextSettings.map);
   }
 
   private handlePlayerRoleChanged(): void {
     this.weapons?.syncRole();
+  }
+
+  private faceBombSpawn(): void {
+    if (!(this.mode instanceof BombMode) || !this.playerController) return;
+    const layout = this.map.bombLayout;
+    if (!layout) return;
+    const playerSpawns = this.mode.player.team === Team.Attackers ? layout.attackerSpawns : layout.defenderSpawns;
+    const opponentSpawns = this.mode.player.team === Team.Attackers ? layout.defenderSpawns : layout.attackerSpawns;
+    const center = (points: THREE.Vector3[]) => points
+      .reduce((total, point) => total.add(point), new THREE.Vector3())
+      .multiplyScalar(1 / Math.max(1, points.length));
+    const direction = center(opponentSpawns).sub(center(playerSpawns)).setY(0);
+    if (direction.lengthSq() > 0.001) this.playerController.faceDirection(direction.normalize());
   }
 
   private handlePlayerDamage(source: THREE.Vector3, damage: number): void {
@@ -278,13 +305,14 @@ export class Game {
       this.updateMenuCamera(delta);
     } else {
       const locked = document.pointerLockElement === this.canvas;
-      const bombCanMove = !(this.mode instanceof BombMode) || this.mode.canPlayerMove;
-      const canMove = locked
+      const playablePhase = this.mode.phase === GamePhase.Countdown || this.mode.phase === GamePhase.Active;
+      const canLook = locked
         && this.mode.player.alive
         && this.mode.player.stunRemaining <= 0
-        && bombCanMove
-        && (this.mode.phase === GamePhase.Countdown || this.mode.phase === GamePhase.Active);
-      this.playerController?.update(delta, canMove);
+        && playablePhase;
+      const bombCanMove = !(this.mode instanceof BombMode) || this.mode.canPlayerMove;
+      const canMove = canLook && bombCanMove;
+      this.playerController?.update(delta, canMove, canLook);
       const canPlayerAttack = !(this.mode instanceof BombMode) || this.mode.canPlayerAttack;
       this.weapons?.update(delta, locked && canPlayerAttack && this.mode.phase === GamePhase.Active && this.mode.player.stunRemaining <= 0);
       this.mode.update(delta);

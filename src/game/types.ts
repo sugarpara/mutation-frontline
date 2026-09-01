@@ -46,7 +46,7 @@ export enum AIState {
 }
 
 export type OperatorId = 'Rook' | 'Kite' | 'Iris' | 'Vela';
-export type MapId = 'refinery' | 'harbor' | 'quarantine';
+export type MapId = 'refinery' | 'harbor' | 'quarantine' | 'relay' | 'foundry';
 export type GameModeId = 'bio' | 'bomb';
 
 export interface WeaponDefinition {

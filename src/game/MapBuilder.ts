@@ -13,6 +13,12 @@ interface BoxOptions {
   metalness?: number;
 }
 
+export interface BombMapLayout {
+  sites: THREE.Vector3[];
+  attackerSpawns: THREE.Vector3[];
+  defenderSpawns: THREE.Vector3[];
+}
+
 export class MapBuilder {
   readonly group = new THREE.Group();
   readonly navigationNodes: NavigationNode[] = [];
@@ -20,7 +26,12 @@ export class MapBuilder {
   readonly infectedSpawnPoints: THREE.Vector3[] = [];
   readonly defensePoints: THREE.Vector3[] = [];
   currentMap: MapId = 'refinery';
+  private activeBombLayout: BombMapLayout | null = null;
   private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
+
+  get bombLayout(): BombMapLayout | null {
+    return this.activeBombLayout;
+  }
 
   constructor(private readonly scene: THREE.Scene, readonly collision: CollisionWorld) {
     this.group.name = 'Mutation Frontline Map';
@@ -31,7 +42,9 @@ export class MapBuilder {
     this.currentMap = mapId;
     this.collision.clear();
     this.clearGroup();
-    if (mapId === 'harbor') this.buildHarbor();
+    if (mapId === 'relay') this.buildRelay();
+    else if (mapId === 'foundry') this.buildFoundry();
+    else if (mapId === 'harbor') this.buildHarbor();
     else if (mapId === 'quarantine') this.buildQuarantine();
     else this.buildRefinery();
   }
@@ -155,6 +168,103 @@ export class MapBuilder {
     this.collision.setGroundResolver((x, z, y) => this.quarantineGround(x, z, y));
   }
 
+  private buildRelay(): void {
+    this.group.name = 'Meridian C-9 Relay Annex';
+    this.setAtmosphere(0x07181a, 0x091d20, 0x8ee9dc, 0x172a28, 2.4, 0.014, 1.15);
+    this.addGround(0x1d3232, 0x3a7772, true);
+    this.addBoundary(0x1d292b, 0x45b8aa);
+
+    // Compact three-lane signal station: both sites have a long route and a mid connector.
+    this.box(-25, 2.2, 22, 12, 4.4, 5, 0x263638, { label: 'relay south service block' });
+    this.box(25, 2.2, 22, 12, 4.4, 5, 0x263638, { label: 'relay south service block' });
+    this.box(0, 2, -21, 12, 4, 3, 0x243234, { label: 'relay north link gallery' });
+    this.addSign(0, 3.05, -19.47, 'MERIDIAN C-9 / SECURE LINK', 0x6fe0d0, 0);
+
+    this.box(0, 1.65, 2, 9, 3.3, 9, 0x2b3d3e, { label: 'central relay core', metalness: 0.48 });
+    this.box(0, 3.75, 2, 3.4, 4.2, 3.4, 0x32494a, { label: 'central relay mast', metalness: 0.62 });
+    this.addRelayDish(0, 6.5, 2, 0x78ead8);
+    this.box(-14, 1.35, 13, 8, 2.7, 3, 0x314345, { label: 'west signal cabinet' });
+    this.box(15, 1.35, 13, 7, 2.7, 3, 0x314345, { label: 'east signal cabinet' });
+    this.box(-11, 1.55, -12, 2.2, 3.1, 8, 0x29393b, { label: 'west relay divider' });
+    this.box(12, 1.55, -12, 2.2, 3.1, 8, 0x29393b, { label: 'east relay divider' });
+
+    // A is a shielded signal vault; B is an exposed power synchronizer.
+    this.addZoneMark(-22, 0.025, -8, 'A', 0x67e8d1);
+    this.box(-30.5, 1.65, -8, 3.5, 3.3, 13, 0x263739, { label: 'A signal bank', metalness: 0.48 });
+    this.box(-22, 1.05, -15, 7, 2.1, 2, 0x34494a, { label: 'A blast cover' });
+    this.box(-17, 1.05, -5, 2, 2.1, 5, 0x34494a, { label: 'A signal cover' });
+    this.addSign(-30.47, 2.45, -8, 'A / SIGNAL VAULT', 0x78ead8, Math.PI / 2);
+
+    this.addZoneMark(22, 0.025, -8, 'B', 0xffc45a);
+    this.box(30.5, 1.65, -8, 3.5, 3.3, 13, 0x303c3c, { label: 'B power bank', metalness: 0.52 });
+    this.box(22, 1.05, -15, 7, 2.1, 2, 0x485044, { label: 'B blast cover' });
+    this.box(17, 1.05, -5, 2, 2.1, 5, 0x485044, { label: 'B power cover' });
+    this.addSign(30.47, 2.45, -8, 'B / POWER SYNC', 0xffcb62, -Math.PI / 2);
+
+    for (const x of [-27, -23, 23, 27]) this.addPipe(x, 3.3, -18, 0.14, 8, 0x5e8581, 'z');
+    this.addCrates([[-29, 10], [-20, 5], [28, 10], [20, 4]], 0x38504d);
+    this.addLights([[-32, 17], [-8, 18], [9, 18], [32, 17], [-17, -19], [17, -19]], 0x8be6d7);
+    this.addZoneLight(-22, 3, -8, 0x60e2cd, 1.8, 16);
+    this.addZoneLight(22, 3, -8, 0xffbe4c, 1.7, 16);
+
+    const sites = [new THREE.Vector3(-22, 0, -8), new THREE.Vector3(22, 0, -8)];
+    const attackerSpawns = this.spawnRow('z', 27, [-6, -2, 2, 6]);
+    const defenderSpawns = this.spawnRow('z', -27, [-6, -2, 2, 6]);
+    this.addRelayNavigation(attackerSpawns, defenderSpawns);
+    this.setBombLayout(sites, attackerSpawns, defenderSpawns);
+    this.collision.setGroundResolver(() => 0);
+  }
+
+  private buildFoundry(): void {
+    this.group.name = 'Cinderline Foundry 12';
+    this.setAtmosphere(0x15191c, 0x202429, 0xffc17a, 0x1b2428, 2.6, 0.0125, 0.72);
+    this.addGround(0x283236, 0x9d5e35, false);
+    this.addBoundary(0x263034, 0xe07a37);
+
+    // The foundry rotates the combat axis: attackers enter from the west, defenders from the east.
+    this.box(-25, 2.1, -15, 8, 4.2, 7, 0x41484a, { label: 'north loading press', metalness: 0.48 });
+    this.box(-25, 2.1, 15, 8, 4.2, 7, 0x41484a, { label: 'south loading press', metalness: 0.48 });
+    this.box(-13, 1.4, 0, 6, 2.8, 4, 0x4a4340, { label: 'ingot carrier', metalness: 0.55 });
+    this.addFoundryFurnace(4, 0);
+    this.box(19, 1.7, -8, 3.2, 3.4, 8, 0x3d4548, { label: 'north heat shield' });
+    this.box(19, 1.7, 8, 3.2, 3.4, 8, 0x3d4548, { label: 'south heat shield' });
+    this.box(28, 2, 0, 4, 4, 10, 0x30383c, { label: 'foundry control spine' });
+    this.addSign(25.97, 2.8, 0, 'CINDERLINE 12 / CONTROL', 0xffa14d, Math.PI / 2);
+
+    this.addZoneMark(12, 0.025, -19, 'A', 0xff9b42);
+    this.box(2, 1.05, -24, 8, 2.1, 2, 0x59453a, { label: 'A mold rack' });
+    this.box(21, 1.05, -22, 5, 2.1, 2, 0x59453a, { label: 'A casting cover' });
+    this.box(10, 0.85, -15, 3, 1.7, 2.2, 0x6a4a34, { label: 'A ingot stack' });
+    this.addSign(12, 2.65, -26.9, 'A / CASTING BAY', 0xffa24f, 0);
+
+    this.addZoneMark(12, 0.025, 19, 'B', 0x75d5ee);
+    this.box(2, 1.05, 24, 8, 2.1, 2, 0x3c4e50, { label: 'B temper rack' });
+    this.box(21, 1.05, 22, 5, 2.1, 2, 0x3c4e50, { label: 'B cooling cover' });
+    this.box(10, 0.85, 15, 3, 1.7, 2.2, 0x40565a, { label: 'B coolant stack' });
+    this.addSign(12, 2.65, 26.9, 'B / TEMPER BAY', 0x80dff2, Math.PI);
+
+    // Glowing floor channels are visual lane guides and do not impede movement.
+    for (const z of [-10, 10]) {
+      this.box(-1, 0.01, z, 24, 0.035, 0.5, z < 0 ? 0xff7d2e : 0x54b9d5, {
+        collision: false,
+        emissive: z < 0 ? 0xd84c18 : 0x277e96,
+        metalness: 0.35,
+      });
+    }
+    this.box(4, 5.8, 0, 0.5, 0.5, 25, 0x7a4d32, { collision: false, metalness: 0.72 });
+    this.addCrates([[-31, -5], [-18, -25], [-18, 25], [31, -16], [31, 16]], 0x4c4540);
+    this.addLights([[-31, -23], [-31, 23], [-8, -28], [-8, 28], [29, -26], [29, 26]], 0xffad63);
+    this.addZoneLight(12, 3, -19, 0xff792f, 2.1, 17);
+    this.addZoneLight(12, 3, 19, 0x55c5e2, 1.8, 17);
+
+    const sites = [new THREE.Vector3(12, 0, -19), new THREE.Vector3(12, 0, 19)];
+    const attackerSpawns = this.spawnRow('x', -34, [-6, -2, 2, 6]);
+    const defenderSpawns = this.spawnRow('x', 34, [-6, -2, 2, 6]);
+    this.addFoundryNavigation(attackerSpawns, defenderSpawns);
+    this.setBombLayout(sites, attackerSpawns, defenderSpawns);
+    this.collision.setGroundResolver(() => 0);
+  }
+
   private clearGroup(): void {
     const sharedMaterials = new Set<THREE.Material>(this.materials.values());
     this.group.traverse((object) => {
@@ -173,6 +283,7 @@ export class MapBuilder {
     this.spawnPoints.length = 0;
     this.infectedSpawnPoints.length = 0;
     this.defensePoints.length = 0;
+    this.activeBombLayout = null;
   }
 
   private setAtmosphere(background: number, fog: number, sky: number, ground: number, keyIntensity: number, density: number, ambientIntensity: number): void {
@@ -270,6 +381,35 @@ export class MapBuilder {
       ring.position.set(x, y, z);
       this.group.add(ring);
     }
+  }
+
+  private addRelayDish(x: number, y: number, z: number, accent: number): void {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    pivot.rotation.x = -0.42;
+    pivot.rotation.z = 0.18;
+    const dish = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.4, 0.65, 0.5, 14, 1, true),
+      this.material(0x668683, 0.36, 0.72),
+    );
+    dish.rotation.x = Math.PI / 2;
+    dish.castShadow = true;
+    pivot.add(dish);
+    const receiver = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), this.material(accent, 0.28, 0.5));
+    receiver.position.z = 1.55;
+    pivot.add(receiver);
+    this.group.add(pivot);
+    this.addZoneLight(x, y + 0.4, z, accent, 1.2, 13);
+  }
+
+  private addFoundryFurnace(x: number, z: number): void {
+    this.box(x, 2.4, z, 11, 4.8, 10, 0x3a3d3f, { label: 'central blast furnace', metalness: 0.6 });
+    for (const offset of [-3.4, 0, 3.4]) {
+      this.box(x + offset, 2.15, z - 5.02, 2.1, 1.5, 0.08, 0xff6b27, { collision: false, emissive: 0xcf3f13 });
+    }
+    for (const offset of [-3.2, 3.2]) this.addPipe(x + offset, 6.3, z, 0.72, 7.8, 0x4c5355, 'y');
+    this.box(x, 4.95, z, 12.2, 0.35, 11.2, 0x754b34, { collision: false, metalness: 0.7 });
+    this.addZoneLight(x, 2.4, z - 5.8, 0xff7028, 2.4, 19);
   }
 
   private addTank(x: number, z: number, radius: number, color: number, accent: number): void {
@@ -466,6 +606,69 @@ export class MapBuilder {
       ['center-south','maintenance'], ['east-south','low-east-entry'], ['low-west-entry','low-west'], ['low-west','low-mid'], ['low-mid','low-east'], ['low-east','low-east-entry'],
     ];
     this.setNavigation(data, links, this.humanSpawns(17, 20), this.cornerSpawns());
+  }
+
+  private addRelayNavigation(attackerSpawns: THREE.Vector3[], defenderSpawns: THREE.Vector3[]): void {
+    const data: NodeData[] = [
+      ['attacker-base',0,0,25], ['attack-west',-12,0,20], ['attack-east',12,0,20], ['mid-south',0,0,15],
+      ['west-long-south',-34,0,12], ['a-south',-23,0,2], ['site-a',-22,0,-8,true],
+      ['west-long-north',-34,0,-19], ['a-north',-21,0,-18], ['a-link',-15,0,-7],
+      ['mid-west',-8,0,8], ['mid-east',8,0,8], ['mid-north',0,0,-7],
+      ['b-link',15,0,-7], ['b-south',23,0,2], ['site-b',22,0,-8,true],
+      ['east-long-south',34,0,12], ['east-long-north',34,0,-19], ['b-north',21,0,-18],
+      ['defender-west',-12,0,-25], ['defender-base',0,0,-27], ['defender-east',12,0,-25],
+    ];
+    const links: Array<[string,string]> = [
+      ['attacker-base','attack-west'], ['attacker-base','mid-south'], ['attacker-base','attack-east'],
+      ['attack-west','west-long-south'], ['attack-west','a-south'], ['attack-west','mid-west'],
+      ['west-long-south','west-long-north'], ['west-long-north','a-north'], ['a-south','site-a'],
+      ['a-south','a-link'], ['site-a','a-north'], ['site-a','a-link'], ['a-north','defender-west'],
+      ['mid-south','mid-west'], ['mid-south','mid-east'], ['mid-west','a-link'], ['mid-west','mid-north'],
+      ['mid-east','b-link'], ['mid-east','mid-north'], ['mid-north','a-link'], ['mid-north','b-link'],
+      ['attack-east','east-long-south'], ['attack-east','b-south'], ['attack-east','mid-east'],
+      ['east-long-south','east-long-north'], ['east-long-north','b-north'], ['b-south','site-b'],
+      ['b-south','b-link'], ['site-b','b-north'], ['site-b','b-link'], ['b-north','defender-east'],
+      ['defender-west','defender-base'], ['defender-base','defender-east'],
+    ];
+    this.setNavigation(data, links, attackerSpawns, defenderSpawns);
+  }
+
+  private addFoundryNavigation(attackerSpawns: THREE.Vector3[], defenderSpawns: THREE.Vector3[]): void {
+    const data: NodeData[] = [
+      ['attacker-base',-33,0,0], ['attacker-north',-31,0,-11], ['attacker-mid',-21,0,0], ['attacker-south',-31,0,11],
+      ['north-loading',-18,0,-22], ['north-furnace',-4,0,-10], ['site-a',12,0,-19,true],
+      ['a-defender-link',25,0,-17], ['defender-north',32,0,-12],
+      ['furnace-west',-3,0,0], ['furnace-north-east',12,0,-8], ['east-mid',23,0,0], ['furnace-south-east',12,0,8],
+      ['south-loading',-18,0,22], ['south-furnace',-4,0,10], ['site-b',12,0,19,true],
+      ['b-defender-link',25,0,17], ['defender-south',32,0,12], ['defender-base',34,0,0],
+    ];
+    const links: Array<[string,string]> = [
+      ['attacker-base','attacker-north'], ['attacker-base','attacker-mid'], ['attacker-base','attacker-south'],
+      ['attacker-north','north-loading'], ['north-loading','north-furnace'], ['north-furnace','site-a'],
+      ['attacker-mid','furnace-west'], ['furnace-west','north-furnace'], ['furnace-west','south-furnace'],
+      ['north-furnace','furnace-north-east'], ['furnace-north-east','site-a'], ['furnace-north-east','east-mid'],
+      ['site-a','a-defender-link'], ['a-defender-link','defender-north'], ['a-defender-link','east-mid'],
+      ['attacker-south','south-loading'], ['south-loading','south-furnace'], ['south-furnace','site-b'],
+      ['south-furnace','furnace-south-east'], ['furnace-south-east','site-b'], ['furnace-south-east','east-mid'],
+      ['site-b','b-defender-link'], ['b-defender-link','defender-south'], ['b-defender-link','east-mid'],
+      ['defender-north','defender-base'], ['defender-south','defender-base'],
+    ];
+    this.setNavigation(data, links, attackerSpawns, defenderSpawns);
+  }
+
+  private setBombLayout(sites: THREE.Vector3[], attackerSpawns: THREE.Vector3[], defenderSpawns: THREE.Vector3[]): void {
+    this.activeBombLayout = {
+      sites: sites.map((site) => site.clone()),
+      attackerSpawns: attackerSpawns.map((spawn) => spawn.clone()),
+      defenderSpawns: defenderSpawns.map((spawn) => spawn.clone()),
+    };
+    this.defensePoints.push(...sites.map((site) => site.clone()));
+  }
+
+  private spawnRow(axis: 'x' | 'z', fixed: number, offsets: number[]): THREE.Vector3[] {
+    return offsets.map((offset) => axis === 'x'
+      ? new THREE.Vector3(fixed, 0, offset)
+      : new THREE.Vector3(offset, 0, fixed));
   }
 
   private humanSpawns(secondRowZ: number, firstRowZ = 28): THREE.Vector3[] {

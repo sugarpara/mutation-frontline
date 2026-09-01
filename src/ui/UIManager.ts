@@ -1,6 +1,7 @@
-import { CharacterRole, GamePhase, Team, WeaponKind, type GameSettings, type WeaponRuntime } from '../game/types';
+import { CharacterRole, GamePhase, Team, WeaponKind, type GameModeId, type GameSettings, type MapId, type WeaponRuntime } from '../game/types';
 import type { Character } from '../game/Character';
 import type { BombHUDState, BombRoundResult } from '../game/BombMode';
+import { DEFAULT_MAP_BY_MODE, MAP_CATALOG, isMapAllowed, isMapId, mapsForMode, normalizeMapForMode } from '../game/mapCatalog';
 
 interface UIActions {
   start: () => void;
@@ -21,6 +22,7 @@ export class UIManager {
     startingWeapon: WeaponKind.Rifle,
     mode: 'bio',
   };
+  private readonly selectedMapByMode: Record<GameModeId, MapId> = { ...DEFAULT_MAP_BY_MODE };
   private actions: UIActions | null = null;
   private announcementTimer = 0;
   private hitTimer = 0;
@@ -44,6 +46,7 @@ export class UIManager {
     this.bindMaps();
     this.bindArsenal();
     this.bindModes();
+    this.renderSelection();
   }
 
   bindActions(actions: UIActions): void {
@@ -53,6 +56,18 @@ export class UIManager {
     this.element<HTMLButtonElement>('restart-game').onclick = actions.restart;
     this.element<HTMLButtonElement>('quit-to-menu').onclick = actions.toMenu;
     this.element<HTMLButtonElement>('result-to-menu').onclick = actions.toMenu;
+  }
+
+  setSelection(mode: GameModeId, requestedMap?: MapId, notify = true): void {
+    if (isMapAllowed(this.settings.mode, this.settings.map)) {
+      this.selectedMapByMode[this.settings.mode] = this.settings.map;
+    }
+    const map = normalizeMapForMode(mode, requestedMap ?? this.selectedMapByMode[mode]);
+    this.selectedMapByMode[mode] = map;
+    this.settings.mode = mode;
+    this.settings.map = map;
+    this.renderSelection();
+    if (notify) this.actions?.settingsChanged(this.settings);
   }
 
   update(delta: number): void {
@@ -253,12 +268,7 @@ export class UIManager {
       blip.remove();
       this.radarBlipElements.delete(id);
     }
-    const zoneNames: Record<GameSettings['map'], string> = {
-      refinery: '沙脊炼化基地',
-      harbor: '夜港货运站',
-      quarantine: 'Q-17 地下隔离区',
-    };
-    this.element('radar-zone').textContent = zoneNames[this.settings.map];
+    this.element('radar-zone').textContent = MAP_CATALOG[this.settings.map].name;
   }
 
   setWeaponSlot(slot: number): void {
@@ -317,13 +327,15 @@ export class UIManager {
   private bindMenuTabs(): void {
     document.querySelectorAll<HTMLButtonElement>('.tab-button').forEach((button) => {
       button.addEventListener('click', () => {
-        document.querySelectorAll('.tab-button').forEach((item) => item.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach((item) => item.classList.remove('active'));
-        button.classList.add('active');
-        document.querySelector(`[data-panel="${button.dataset.tab}"]`)?.classList.add('active');
-        this.mainMenu.classList.toggle('arsenal-mode', button.dataset.tab === 'arsenal');
+        this.showTab(button.dataset.tab ?? 'play');
       });
     });
+  }
+
+  private showTab(tab: string): void {
+    document.querySelectorAll<HTMLElement>('.tab-button').forEach((item) => item.classList.toggle('active', item.dataset.tab === tab));
+    document.querySelectorAll<HTMLElement>('.tab-panel').forEach((item) => item.classList.toggle('active', item.dataset.panel === tab));
+    this.mainMenu.classList.toggle('arsenal-mode', tab === 'arsenal');
   }
 
   private bindSettings(): void {
@@ -364,36 +376,59 @@ export class UIManager {
   }
 
   private bindMaps(): void {
-    const mapCopy = {
-      refinery: ['沙脊炼化基地', '夕照炼油设施，管桥、高台、仓库和低位管廊形成四路交叉。'],
-      harbor: ['夜港货运站', '潮湿夜港，中央仓楼、集装箱巷道、起重机平台与下穿通道。'],
-      quarantine: ['Q-17 地下隔离区', '废弃地铁轴线连接培养舱、检疫实验室、坍塌区与排水回路。'],
-    } as const;
-    document.querySelectorAll<HTMLButtonElement>('.map-option').forEach((button) => {
-      button.addEventListener('click', () => {
-        const map = button.dataset.map as GameSettings['map'];
-        this.settings.map = map;
-        document.querySelectorAll('.map-option').forEach((item) => item.classList.toggle('selected', item === button));
-        this.element('mission-map-name').textContent = mapCopy[map][0];
-        this.element('mission-map-desc').textContent = mapCopy[map][1];
-        this.actions?.settingsChanged(this.settings);
-      });
+    this.element('map-selector').addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) return;
+      const button = event.target.closest<HTMLButtonElement>('.map-option[data-map]');
+      const map = button?.dataset.map ?? null;
+      if (!isMapId(map) || !isMapAllowed(this.settings.mode, map)) return;
+      this.selectedMapByMode[this.settings.mode] = map;
+      this.settings.map = map;
+      this.renderSelection();
+      this.actions?.settingsChanged(this.settings);
     });
   }
 
   private bindModes(): void {
     document.querySelectorAll<HTMLButtonElement>('.mode-card[data-mode]').forEach((button) => {
       button.addEventListener('click', () => {
-        this.settings.mode = button.dataset.mode as GameSettings['mode'];
-        document.querySelectorAll('.mode-card[data-mode]').forEach((item) => item.classList.toggle('selected', item === button));
-        const bomb = this.settings.mode === 'bomb';
-        this.element('mission-mode-value').textContent = bomb ? '战术爆破' : '生化感染';
-        this.element('mission-size-value').textContent = bomb ? '4 进攻 + 4 防守' : '1 玩家 + 7 AI';
-        this.element('mission-time-value').textContent = bomb ? '02:30' : '03:00';
-        this.element<HTMLButtonElement>('start-game').textContent = bomb ? '部署爆破行动' : '部署行动';
-        this.actions?.settingsChanged(this.settings);
+        this.setSelection(button.dataset.mode as GameModeId);
+        this.showTab('play');
       });
     });
+  }
+
+  private renderSelection(): void {
+    const bomb = this.settings.mode === 'bomb';
+    const map = MAP_CATALOG[this.settings.map];
+    this.mainMenu.dataset.mode = this.settings.mode;
+    this.element('menu-protocol-label').textContent = bomb ? 'KESTREL TACTICAL OPERATIONS' : 'KESTREL BIOHAZARD RESPONSE';
+    this.element('menu-status-text').textContent = bomb ? '战术爆破攻防链路已就绪' : '多战区感染封锁协议已启动';
+    this.element('mission-label').textContent = bomb ? '当前行动 · 爆破攻防' : '当前行动 · 生化封锁';
+    this.element('mission-map-name').textContent = map.name;
+    this.element('mission-map-desc').textContent = map.description;
+    this.element('mission-mode-value').textContent = bomb ? '战术爆破' : '生化感染';
+    this.element('mission-size-value').textContent = bomb ? '4 进攻 + 4 防守' : '1 玩家 + 7 AI';
+    this.element('mission-time-value').textContent = bomb ? '02:30' : '03:00';
+    this.element<HTMLButtonElement>('start-game').textContent = bomb ? '部署爆破行动' : '部署生化行动';
+    document.querySelectorAll<HTMLElement>('.mode-card[data-mode]').forEach((item) => {
+      const selected = item.dataset.mode === this.settings.mode;
+      item.classList.toggle('selected', selected);
+      const status = item.querySelector<HTMLElement>('i');
+      if (status) status.textContent = selected ? '已选择' : '可用';
+    });
+
+    const selector = this.element('map-selector');
+    selector.replaceChildren(...mapsForMode(this.settings.mode).map((definition, index) => {
+      const button = document.createElement('button');
+      button.className = `map-option${definition.id === this.settings.map ? ' selected' : ''}`;
+      button.dataset.map = definition.id;
+      const label = document.createElement('b');
+      label.textContent = `${bomb ? '爆破' : '生化'}地图 ${index + 1}`;
+      const name = document.createElement('span');
+      name.textContent = definition.shortName;
+      button.append(label, name);
+      return button;
+    }));
   }
 
   private bindArsenal(): void {

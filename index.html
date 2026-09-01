@@ -13,10 +13,10 @@
 
       <section id="main-menu" class="screen active">
         <div class="brand-block">
-          <p class="eyebrow">KESTREL BIOHAZARD RESPONSE</p>
+          <p id="menu-protocol-label" class="eyebrow">KESTREL BIOHAZARD RESPONSE</p>
           <h1>异变前线</h1>
           <p class="subtitle">MUTATION FRONTLINE</p>
-          <p class="status-line"><span class="status-dot"></span> 多战区感染封锁协议已启动</p>
+          <p class="status-line"><span class="status-dot"></span><span id="menu-status-text">多战区感染封锁协议已启动</span></p>
         </div>
 
         <div class="menu-shell">
@@ -30,7 +30,7 @@
 
           <div class="menu-content">
             <div class="tab-panel active" data-panel="play">
-              <div class="mission-label">当前行动</div>
+              <div id="mission-label" class="mission-label">当前行动 · 生化封锁</div>
               <h2 id="mission-map-name">Q-17 地下隔离区</h2>
               <p id="mission-map-desc">废弃地铁轴线连接培养舱、检疫实验室、坍塌区与排水回路。</p>
               <div class="mission-stats">
@@ -38,11 +38,7 @@
                 <span><b>规模</b> <i id="mission-size-value">1 玩家 + 7 AI</i></span>
                 <span><b>时限</b> <i id="mission-time-value">03:00</i></span>
               </div>
-              <div class="map-selector" aria-label="地图选择">
-                <button class="map-option" data-map="refinery"><b>地图 1</b><span>沙脊炼化基地</span></button>
-                <button class="map-option" data-map="harbor"><b>地图 2</b><span>夜港货运站</span></button>
-                <button class="map-option selected" data-map="quarantine"><b>地图 3</b><span>Q-17 隔离区</span></button>
-              </div>
+              <div id="map-selector" class="map-selector" aria-label="地图选择"></div>
               <button id="start-game" class="primary-button">部署行动</button>
             </div>
 

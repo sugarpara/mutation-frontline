@@ -35,6 +35,8 @@ button { letter-spacing: 0; }
   padding: clamp(28px, 5vh, 64px) clamp(24px, 6vw, 92px);
   background: linear-gradient(90deg, rgba(4, 10, 15, 0.93) 0%, rgba(4, 10, 15, 0.68) 46%, rgba(4, 10, 15, 0.08) 78%);
 }
+#main-menu[data-mode="bomb"] { --cyan: #ffb14d; }
+#main-menu[data-mode="bomb"] .status-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
 #main-menu.active { display: block; }
 #main-menu::before {
   content: "";
@@ -51,7 +53,7 @@ button { letter-spacing: 0; }
 .status-line { margin: 18px 0 0; color: #afbec7; font-size: 13px; }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); }
 
-.menu-shell { position: relative; display: flex; width: min(820px, 70vw); height: min(410px, 46vh); margin-top: 32px; border-left: 2px solid var(--cyan); background: rgba(5, 11, 17, .76); backdrop-filter: blur(10px); }
+.menu-shell { position: relative; display: flex; width: min(820px, 70vw); height: min(470px, 58vh); margin-top: 32px; border-left: 2px solid var(--cyan); background: rgba(5, 11, 17, .76); backdrop-filter: blur(10px); }
 .menu-tabs { display: flex; flex-direction: column; flex: 0 0 176px; border-right: 1px solid rgba(255,255,255,.1); }
 .tab-button { min-height: 60px; padding: 0 22px; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); color: #8092a0; background: transparent; text-align: left; cursor: pointer; }
 .tab-button:hover { color: white; background: rgba(77,227,231,.06); }
@@ -65,7 +67,7 @@ button { letter-spacing: 0; }
 .mission-stats { display: flex; gap: 10px; margin: 24px 0; }
 .mission-stats span { min-width: 115px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.09); color: #b5c3cb; font-size: 11px; background: rgba(255,255,255,.025); }
 .mission-stats i { font-style: normal; }
-.map-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.map-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin: 12px 0; }
 .map-option { min-height: 48px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.1); color: #8fa1aa; background: rgba(255,255,255,.025); text-align: left; cursor: pointer; }
 .map-option b, .map-option span { display: block; }
 .map-option b { color: #d7e5e9; font-size: 10px; }
